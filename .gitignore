@@ -1,3 +1,16 @@
+# Built
+/bin
+*.pb.go
+
+# Log
+*.log
+
+# Runtime generated
+*.pid
+
+# Sublime
+*.sublime-*
+
 # Binaries for programs and plugins
 *.exe
 *.dll
