@@ -5,16 +5,17 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"./config"
+	"./server"
 )
 
-const versionMajor int = 0
-const versionMinor int = 0
-const versionPatch int = 1
-
 func main() {
+	version := fmt.Sprintf("%d.%d.%d", config.VersionMajor, config.VersionMinor, config.VersionPatch)
+
 	if len(os.Args) > 1 {
 		if os.Args[1] == "-v" {
-			fmt.Println(fmt.Sprintf("botsbox version: %d.%d.%d", versionMajor, versionMinor, versionPatch))
+			fmt.Println("botsbox version:", version)
 			return
 		} else if os.Args[1] == "-h" {
 			fmt.Println("Usage: botsbox [options]")
@@ -27,5 +28,8 @@ func main() {
 
 	flag.Parse()
 
-	log.Printf("### botsbox %d.%d.%d started", versionMajor, versionMinor, versionPatch)
+	ok := server.Start()
+	if ok {
+		log.Printf("### botsbox %s started \n", version)
+	}
 }
