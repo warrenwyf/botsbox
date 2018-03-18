@@ -7,12 +7,12 @@ import (
 	"os"
 
 	"./config"
+	"./runtime"
 	"./server"
 )
 
 func main() {
-	version := fmt.Sprintf("%d.%d.%d", config.VersionMajor, config.VersionMinor, config.VersionPatch)
-
+	version := fmt.Sprintf("%d.%d.%d", runtime.VersionMajor, runtime.VersionMinor, runtime.VersionPatch)
 	if len(os.Args) > 1 {
 		if os.Args[1] == "-v" {
 			fmt.Println("botsbox version:", version)

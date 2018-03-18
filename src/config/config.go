@@ -7,12 +7,6 @@ import (
 	"sync"
 )
 
-const (
-	VersionMajor int = 0
-	VersionMinor int = 0
-	VersionPatch int = 1
-)
-
 var (
 	confSingleton *Conf
 	once          sync.Once
