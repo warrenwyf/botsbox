@@ -20,17 +20,17 @@ type Conf struct {
 }
 
 func (conf *Conf) SyncFromFile(filePath string) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Println("Cannot read config file:", filePath, ", Error:", err.Error())
-		return err
+	file, errOpen := os.Open(filePath)
+	if errOpen != nil {
+		log.Println("Cannot read config file:", filePath, ",", errOpen.Error())
+		return errOpen
 	}
 
 	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&conf)
-	if err != nil {
-		log.Println("Cannot parse config file:", filePath, ", Error:", err.Error())
-		return err
+	errDecode := decoder.Decode(&conf)
+	if errDecode != nil {
+		log.Println("Cannot parse config file:", filePath, ",", errDecode.Error())
+		return errDecode
 	}
 
 	return nil
@@ -39,7 +39,9 @@ func (conf *Conf) SyncFromFile(filePath string) error {
 func GetConf() *Conf {
 	once.Do(func() {
 		confSingleton = &Conf{ // Default configuration
-			HttpPort: 6075,
+			HttpPort:  6075,
+			StoreType: "sqlite",
+			StoreConn: "./botsbox.db",
 		}
 	})
 
