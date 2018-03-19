@@ -9,12 +9,10 @@ import (
 )
 
 func Start() bool {
-	conf := config.GetConf()
-	conf.SyncFromFile("./config.json")
-
 	s := &server{
 		hub: newHub(),
 	}
+
 	return s.start()
 }
 
@@ -31,11 +29,19 @@ func (srv *server) start() bool {
 		return false
 	}
 
-	http.HandleFunc("/", hub.HttpHandler)
+	errInit := hub.init()
+	if errInit != nil {
+		log.Fatalln("Hub initalized error: ", errInit.Error())
+		return false
+	}
 
-	err := http.ListenAndServe(fmt.Sprintf(":%d", conf.HttpPort), nil)
-	if err != nil {
-		log.Fatalln("Listen http error: ", err.Error())
+	go hub.loadJobs() // Load exsiting jobs from store
+
+	http.HandleFunc("/", hub.httpHandler)
+
+	errHttp := http.ListenAndServe(fmt.Sprintf(":%d", conf.HttpPort), nil)
+	if errHttp != nil {
+		log.Fatalln("Listen http error: ", errHttp.Error())
 		return false
 	}
 
