@@ -6,7 +6,7 @@
 *.log
 
 # Runtime generated
-*.pid
+*.db
 
 # Sublime
 *.sublime-*
