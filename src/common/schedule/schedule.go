@@ -12,9 +12,9 @@ type Schedule struct {
 	tick time.Duration
 
 	taskIdSeq       uint64
-	taskMap         map[uint64]*task
+	taskMap         map[uint64]*Task
 	taskTree        *llrb.LLRB
-	taskUpdatedChan chan *task
+	taskUpdatedChan chan *Task
 
 	paused     bool
 	pauseChan  chan struct{}
@@ -24,14 +24,14 @@ type Schedule struct {
 
 var signal = struct{}{}
 
-func New() *Schedule {
+func NewSchedule() *Schedule {
 	return &Schedule{
 		tick: time.Second,
 
 		taskIdSeq:       0,
-		taskMap:         make(map[uint64]*task),
+		taskMap:         make(map[uint64]*Task),
 		taskTree:        llrb.New(),
-		taskUpdatedChan: make(chan *task),
+		taskUpdatedChan: make(chan *Task),
 
 		paused:     false,
 		pauseChan:  make(chan struct{}),
@@ -40,19 +40,22 @@ func New() *Schedule {
 	}
 }
 
-func (self *Schedule) CreateTask(fn func(), interval time.Duration, delay time.Duration) uint64 {
+func (self *Schedule) CreateTask(title string, fn func(), interval time.Duration, delay time.Duration) uint64 {
 	now := time.Now()
 
 	atomic.AddUint64(&self.taskIdSeq, 1)
 
-	t := &task{
-		id:       self.taskIdSeq,
+	t := &Task{
+		id: self.taskIdSeq,
+
+		title:    title,
 		fn:       fn,
 		interval: interval,
 		delay:    delay,
 
 		nextTime: now.Add(delay),
 
+		executing:   false,
 		updatedChan: self.taskUpdatedChan,
 	}
 
@@ -78,6 +81,10 @@ func (self *Schedule) DeleteTask(id uint64) bool {
 	}
 
 	return false
+}
+
+func (self *Schedule) AllTasks() map[uint64]*Task {
+	return self.taskMap
 }
 
 func (self *Schedule) Start() {
@@ -106,7 +113,7 @@ func (self *Schedule) Stop() {
 
 func (self *Schedule) loop() {
 	var (
-		fakeTask = &task{} // For quering in taskTree
+		fakeTask = &Task{} // For quering in taskTree
 		ticker   = time.NewTicker(self.tick)
 	)
 
@@ -137,7 +144,7 @@ end:
 }
 
 func (self *Schedule) readTaskChan() {
-	var updatedTask *task
+	var updatedTask *Task
 
 	for {
 		select {
@@ -153,7 +160,7 @@ end:
 }
 
 func (self *Schedule) execTaskIter(item llrb.Item) bool {
-	t, ok := item.(*task)
+	t, ok := item.(*Task)
 	if !ok {
 		return false
 	}

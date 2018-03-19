@@ -7,17 +7,17 @@ import (
 	"time"
 )
 
-var s = New()
+var s = NewSchedule()
 
 func Test_Start(t *testing.T) {
 	s.Start()
 }
 
 func Test_CreateTask(t *testing.T) {
-	id1 := s.CreateTask(func() {
+	id1 := s.CreateTask("t1", func() {
 		fmt.Println(time.Now(), "Task 1 is executed")
 	}, 2*time.Second, 0)
-	id2 := s.CreateTask(func() {
+	id2 := s.CreateTask("t2", func() {
 		fmt.Println(time.Now(), "Task 2 is executed")
 	}, 4*time.Second, 0)
 
@@ -37,8 +37,9 @@ func Benchmark_CreateTask(b *testing.B) {
 	count := 10
 
 	for i := 0; i < count; i++ {
+		title := fmt.Sprintf("t%d", i)
 		log := fmt.Sprintf("BenchTask %d is executed", i)
-		id := s.CreateTask(func() {
+		id := s.CreateTask(title, func() {
 			fmt.Println(time.Now(), log)
 		}, time.Second, time.Duration(rand.Intn(10))*time.Second)
 
