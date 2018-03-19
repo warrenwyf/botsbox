@@ -12,6 +12,6 @@ go get github.com/petar/GoLLRB/llrb
 echo "go build ..."
 go build -o bin/botsbox src/main.go
 
-echo "copy configuration ..."
-mkdir -p bin/
-cp config.json bin/
+echo "copy misc files ..."
+mkdir -p bin/misc/
+cp misc/* bin/misc/
