@@ -1,7 +1,7 @@
 package store
 
 import (
-	"../../config"
+	"../config"
 )
 
 const (

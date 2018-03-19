@@ -9,9 +9,9 @@ import (
 	"net/http"
 
 	"../common/schedule"
-	"../common/store"
 	"../crawler/job"
 	"../runtime"
+	"../store"
 )
 
 type hub struct {
