@@ -46,20 +46,22 @@ func (self *Task) exec() {
 		return
 	}
 
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("Recovering", err)
-		}
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Println("Recovering", err)
+			}
+		}()
+
+		self.executing = true
+
+		self.fn()
+
+		self.nextTime = self.nextTime.Add(self.interval)
+		self.executing = false
+
+		self.updatedChan <- self
 	}()
-
-	self.executing = true
-
-	self.fn()
-
-	self.nextTime = self.nextTime.Add(self.interval)
-	self.executing = false
-
-	self.updatedChan <- self
 }
 
 func (self *Task) cancel() {
