@@ -53,14 +53,14 @@ func main() {
 
 	// Read configuration file
 	conf := config.GetConf()
-	errConf := conf.SyncFromFile(runtime.ConfigFile)
+	errConf := conf.SyncFromFile(runtime.GetAbsConfigFile())
 	if errConf != nil {
 		fmt.Println("⚡  Server will be started with default options")
 	}
 
-	ok := server.Start()
-	if !ok {
-		fmt.Printf("🔥  botsbox %s failed to start \n", version)
+	err := server.Start()
+	if err != nil {
+		fmt.Printf("🔥  botsbox %s failed to start: %v \n", version, err)
 		fmt.Println("\t Configuration file path: ", runtime.ConfigFile)
 		fmt.Println("\t Data directory path: ", runtime.DataDir)
 		fmt.Println("\t Log directory path: ", runtime.LogDir)

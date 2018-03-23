@@ -1,49 +1,83 @@
 package server
 
 import (
+	"errors"
 	"fmt"
-	"log"
+	"io"
 	"net/http"
+	"os"
 
 	"../config"
+	"../xlog"
 )
 
-func Start() bool {
+var signal = struct{}{}
+
+func Start() error {
 	s := &server{
-		hub: newHub(),
+		stopChan: make(chan struct{}),
+		hub:      newHub(),
 	}
 
 	return s.start()
 }
 
 type server struct {
-	hub *hub
+	stopChan chan struct{}
+	hub      *hub
 }
 
-func (srv *server) start() bool {
-	conf := config.GetConf()
-
-	hub := srv.hub
+func (self *server) start() error {
+	hub := self.hub
 	if hub == nil {
-		log.Fatalln("Server initalized error")
-		return false
+		return errors.New("Server initalized error")
 	}
 
 	errInit := hub.init()
 	if errInit != nil {
-		log.Fatalln("Hub initalized error: ", errInit.Error())
-		return false
+		return errInit
 	}
 
 	go hub.loadJobs() // Load exsiting jobs from store
 
 	http.HandleFunc("/", hub.httpHandler)
+	http.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
+		uri := r.RequestURI
+		if uri == "/stop" {
+			self.stop()
+
+			io.WriteString(w, "stopping")
+			return
+		}
+	})
+	go self.listenHttp()
+
+	// Wait for stop signal
+	for {
+		select {
+		case <-self.stopChan:
+			goto end
+		}
+	}
+
+end:
+
+	return nil
+}
+
+func (self *server) stop() {
+	xlog.FlushAll()
+	xlog.CloseAll()
+
+	self.stopChan <- signal
+}
+
+func (self *server) listenHttp() {
+	conf := config.GetConf()
 
 	errHttp := http.ListenAndServe(fmt.Sprintf(":%d", conf.HttpPort), nil)
 	if errHttp != nil {
-		log.Fatalln("Listen http error: ", errHttp.Error())
-		return false
+		xlog.Errln("Listern HTTP error", errHttp)
+		os.Exit(1)
 	}
-
-	return true
 }
