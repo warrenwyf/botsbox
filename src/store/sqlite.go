@@ -37,7 +37,18 @@ func (self *SqliteStore) Init() error {
 	return nil
 }
 
-func (self *SqliteStore) CreateDataset(datasetName string, fieldNames []string, fieldTypes []string) (err error) {
+func (self *SqliteStore) HasDataset(datasetName string) bool {
+	sql := fmt.Sprintf(`SELECT name FROM sqlite_master WHERE type='table' AND name='%s'`, datasetName)
+	rows, errSql := self.db.Query(sql)
+	if errSql != nil {
+		return false
+	}
+	defer rows.Close()
+
+	return rows.Next()
+}
+
+func (self *SqliteStore) CreateDataset(datasetName string, fieldNames []string, fieldTypes []string) error {
 	fieldCount := util.IntMin(len(fieldNames), len(fieldTypes))
 	if fieldCount <= 0 {
 		return errors.New("Dataset must have at least one field")
@@ -49,7 +60,7 @@ func (self *SqliteStore) CreateDataset(datasetName string, fieldNames []string, 
 	}
 	fieldsString := strings.Join(fields, ",")
 
-	sql := fmt.Sprintf(`CREATE TABLE "%s" (%s)`, datasetName, fieldsString)
+	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s" (%s)`, datasetName, fieldsString)
 	_, errSql := self.db.Exec(sql)
 	if errSql != nil {
 		return errSql

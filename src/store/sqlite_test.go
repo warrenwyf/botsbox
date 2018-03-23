@@ -1,11 +1,13 @@
 package store
 
 import (
+	"os"
+	"path"
 	"testing"
 )
 
 var sqliteStore Store = &SqliteStore{
-	FilePath: "/tmp/botsbox-test.db",
+	FilePath: path.Join("/tmp", "botsbox-test.db"),
 }
 
 func Test_Init(t *testing.T) {
@@ -16,18 +18,28 @@ func Test_Init(t *testing.T) {
 }
 
 func Test_CreateDataset(t *testing.T) {
-	fieldNames := []string{"key", "value"}
-	fieldTypes := []string{"text", "integer"}
-	err := sqliteStore.CreateDataset("unittest", fieldNames, fieldTypes)
-	if err != nil { // Maybe dataset is already exists, do not fatal
-		t.Logf("SqliteStore.CreateTable() failed: %v", err.Error())
+	fieldNames := []string{"key", "value", "time"}
+	fieldTypes := []string{"text", "integer", "timestamp DEFAULT CURRENT_TIMESTAMP"}
+	err := sqliteStore.CreateDataset("$unittest", fieldNames, fieldTypes)
+	if err != nil {
+		t.Fatalf("SqliteStore.CreateTable() failed: %v", err.Error())
+	}
+}
+
+func Test_HasDataset(t *testing.T) {
+	if !sqliteStore.HasDataset("$unittest") {
+		t.Fatalf("SqliteStore.HasDataset(%s) should be true", "$unittest")
+	}
+
+	if sqliteStore.HasDataset("$foo") {
+		t.Fatalf("SqliteStore.HasDataset(%s) should be false", "$foo")
 	}
 }
 
 func Test_InsertObject(t *testing.T) {
 	fields := []string{"key", "value"}
 	values := []interface{}{"foo", 2, "none"}
-	oid, err := sqliteStore.InsertObject("unittest", fields, values)
+	oid, err := sqliteStore.InsertObject("$unittest", fields, values)
 	if err != nil {
 		t.Fatalf("SqliteStore.CreateObject() failed: %v", err.Error())
 	} else {

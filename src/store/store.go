@@ -1,17 +1,22 @@
 package store
 
 import (
+	"os"
+	"path"
+
 	"../config"
+	"../runtime"
 )
 
 const (
-	JobDataset = "job"
+	JobDataset = "$job"
 )
 
 type Store interface {
 	Init() error
 
-	CreateDataset(datasetName string, fieldNames []string, fieldTypes []string) (err error)
+	HasDataset(datasetName string) bool
+	CreateDataset(datasetName string, fieldNames []string, fieldTypes []string) error
 
 	InsertObject(dataset string, fields []string, values []interface{}) (oid string, err error)
 	DeleteObjects(dataset string, oids []string) (count int64, err error)
@@ -28,7 +33,13 @@ func NewStore() Store {
 	}
 
 	// Default use sqlite for dev & test
+	filePath := conf.StoreConn
+	if !path.IsAbs(filePath) {
+		dataDir := runtime.GetAbsDataDir()
+		os.MkdirAll(dataDir, 0755)
+		filePath = path.Join(dataDir, filePath)
+	}
 	return &SqliteStore{
-		FilePath: conf.StoreConn,
+		FilePath: filePath,
 	}
 }
