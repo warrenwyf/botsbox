@@ -1,4 +1,4 @@
-package fetcher
+package fetchers
 
 type Fetcher interface {
 	Fetch() (result *Result, err error)
