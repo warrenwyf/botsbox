@@ -55,6 +55,7 @@ func main() {
 	conf := config.GetConf()
 	errConf := conf.SyncFromFile(runtime.GetAbsConfigFile())
 	if errConf != nil {
+		fmt.Println("Read configuration error:", errConf.Error())
 		fmt.Println("⚡  Server will be started with default options")
 	}
 

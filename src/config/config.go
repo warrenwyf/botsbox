@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 	"sync"
 )
@@ -22,14 +21,12 @@ type Conf struct {
 func (conf *Conf) SyncFromFile(filePath string) error {
 	file, errOpen := os.Open(filePath)
 	if errOpen != nil {
-		log.Println("Cannot read config file:", filePath, ",", errOpen.Error())
 		return errOpen
 	}
 
 	decoder := json.NewDecoder(file)
 	errDecode := decoder.Decode(&conf)
 	if errDecode != nil {
-		log.Println("Cannot parse config file:", filePath, ",", errDecode.Error())
 		return errDecode
 	}
 
