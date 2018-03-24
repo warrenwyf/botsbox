@@ -3,28 +3,27 @@ package server
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"../config"
 	"../xlog"
 )
 
-var signal = struct{}{}
-
 func Start() error {
 	s := &server{
-		stopChan: make(chan struct{}),
-		hub:      newHub(),
+		sigChan: make(chan os.Signal),
+		hub:     newHub(),
 	}
 
 	return s.start()
 }
 
 type server struct {
-	stopChan chan struct{}
-	hub      *hub
+	sigChan chan os.Signal
+	hub     *hub
 }
 
 func (self *server) start() error {
@@ -41,35 +40,30 @@ func (self *server) start() error {
 	go hub.loadJobs() // Load exsiting jobs from store
 
 	http.HandleFunc("/", hub.httpHandler)
-	http.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
-		uri := r.RequestURI
-		if uri == "/stop" {
-			self.stop()
-
-			io.WriteString(w, "stopping")
-			return
-		}
-	})
 	go self.listenHttp()
 
-	// Wait for stop signal
+	xlog.Outln("Server started")
+
+	// Wait for system signal
+	signal.Notify(self.sigChan, syscall.SIGINT, syscall.SIGTERM)
 	for {
 		select {
-		case <-self.stopChan:
-			goto end
+		case sig := <-self.sigChan:
+			switch sig {
+			case syscall.SIGINT:
+				goto end
+			case syscall.SIGTERM:
+				goto end
+			}
 		}
 	}
 
 end:
-
-	return nil
-}
-
-func (self *server) stop() {
+	xlog.Outln("Server stopped")
 	xlog.FlushAll()
 	xlog.CloseAll()
 
-	self.stopChan <- signal
+	return nil
 }
 
 func (self *server) listenHttp() {
