@@ -13,13 +13,13 @@ func Test_Start(t *testing.T) {
 	s.Start()
 }
 
-func Test_CreateTask(t *testing.T) {
+func Test_CreateAndDeleteTask(t *testing.T) {
 	id1 := s.CreateTask("t1", func() {
 		fmt.Println(time.Now(), "Task 1 is executed")
-	}, 2*time.Second, 0)
+	}, 2*time.Second, 500*time.Millisecond)
 	id2 := s.CreateTask("t2", func() {
 		fmt.Println(time.Now(), "Task 2 is executed")
-	}, 4*time.Second, 0)
+	}, 4*time.Second, 500*time.Millisecond)
 
 	time.Sleep(10 * time.Second)
 

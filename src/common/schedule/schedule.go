@@ -31,7 +31,7 @@ func NewSchedule() *Schedule {
 		taskIdSeq:       0,
 		taskMap:         make(map[uint64]*Task),
 		taskTree:        llrb.New(),
-		taskUpdatedChan: make(chan *Task),
+		taskUpdatedChan: make(chan *Task, 1000),
 
 		paused:     false,
 		pauseChan:  make(chan struct{}),
