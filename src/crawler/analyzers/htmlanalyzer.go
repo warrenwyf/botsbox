@@ -47,6 +47,8 @@ func (self *HtmlAnalyzer) ParseBytes(b []byte, baseTarget *target.Target) (*Resu
 		})
 	}
 
+	baseResult := baseTarget.GetResult()
+
 	// Analyze outputs
 	for _, output := range baseTarget.Outputs {
 		data := map[string]interface{}{}
@@ -64,6 +66,7 @@ func (self *HtmlAnalyzer) ParseBytes(b []byte, baseTarget *target.Target) (*Resu
 		if len(name) > 0 {
 			pack := &sink.SinkPack{
 				Name: name,
+				Hash: baseResult.Hash,
 				Url:  baseTarget.Url,
 				Data: data,
 			}

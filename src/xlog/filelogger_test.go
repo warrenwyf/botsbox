@@ -14,10 +14,10 @@ func Test_FileLogger(t *testing.T) {
 		t.Fatalf(`NewFileLogger(%s) failed`, logFileName)
 	}
 
-	// Default flush interval is 5 sec, only 5 logs will be saved
-	for i := 0; i < 7; i++ {
+	// Default flush interval is 5 seconds, only 7 logs will be saved
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Duration(700) * time.Millisecond)
 		logger.Println("This is a log", i)
-		time.Sleep(time.Second)
 	}
 
 	logger.Close()

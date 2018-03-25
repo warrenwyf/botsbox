@@ -54,7 +54,14 @@ func (self *Task) exec() {
 
 		self.fn()
 
-		self.nextTime = self.nextTime.Add(self.interval)
+		// Calculate next time and make sure the time is after now
+		now := time.Now()
+		next := self.nextTime.Add(self.interval)
+		if now.After(next) {
+			next = now
+		}
+		self.nextTime = next
+
 		self.executing = false
 
 		self.updatedChan <- self

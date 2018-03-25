@@ -115,9 +115,11 @@ func (self *FileLogger) loop(flushInterval time.Duration) {
 	var ticker = time.NewTicker(flushInterval)
 	defer ticker.Stop()
 
-	defer close(self.logChan)
-	defer close(self.flushChan)
-	defer close(self.closeChan)
+	defer func() {
+		close(self.logChan)
+		close(self.flushChan)
+		close(self.closeChan)
+	}()
 
 	for {
 		select {

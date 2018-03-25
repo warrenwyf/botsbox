@@ -43,6 +43,7 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 		}
 
 		return &Result{
+			Hash:    self.Hash(),
 			Format:  ResultFormat_Bytes,
 			Content: bytes,
 		}, nil
@@ -51,12 +52,12 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 	return nil, nil
 }
 
-func (self *HttpFetcher) SetUrl(v string) {
-	self.url = v
+func (self *HttpFetcher) SetUrl(p *string) {
+	self.url = *p
 }
 
-func (self *HttpFetcher) SetMethod(v string) {
-	self.method = v
+func (self *HttpFetcher) SetMethod(p *string) {
+	self.method = *p
 }
 
 func (self *HttpFetcher) SetQuery(p *map[string]string) {
@@ -67,8 +68,8 @@ func (self *HttpFetcher) SetForm(p *map[string]string) {
 	self.form = *p
 }
 
-func (self *HttpFetcher) SetContentType(v string) {
-	self.contentType = v
+func (self *HttpFetcher) SetContentType(p *string) {
+	self.contentType = *p
 }
 
 func (self *HttpFetcher) Hash() string {

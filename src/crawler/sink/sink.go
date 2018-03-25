@@ -27,8 +27,8 @@ func (self *Sink) loop(store store.Store) {
 			datasetName := sinkPack.Name
 			if !store.HasDataset(datasetName) {
 				err := store.CreateDataset(datasetName,
-					[]string{"url", "data", "createdAt"},
-					[]string{"text", "text", "timestamp DEFAULT CURRENT_TIMESTAMP"})
+					[]string{"url", "hash", "data", "createdAt"},
+					[]string{"text", "text", "text", "timestamp DEFAULT CURRENT_TIMESTAMP"})
 				if err != nil {
 					xlog.Errln("Create dataset", datasetName, "error:", err)
 				}
@@ -40,8 +40,8 @@ func (self *Sink) loop(store store.Store) {
 			}
 
 			_, err := store.InsertObject(datasetName,
-				[]string{"url", "data"},
-				[]interface{}{sinkPack.Url, jsonData})
+				[]string{"url", "hash", "data"},
+				[]interface{}{sinkPack.Url, sinkPack.Hash, jsonData})
 			if err != nil {
 				xlog.Errln("Insert into dataset", datasetName, "error:", err)
 			}

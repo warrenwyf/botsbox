@@ -6,6 +6,7 @@ type Fetcher interface {
 }
 
 type Result struct {
+	Hash    string
 	Format  int
 	Content interface{}
 }

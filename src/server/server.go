@@ -2,13 +2,10 @@ package server
 
 import (
 	"errors"
-	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"../config"
 	"../xlog"
 )
 
@@ -27,20 +24,19 @@ type server struct {
 }
 
 func (self *server) start() error {
-	hub := self.hub
-	if hub == nil {
+	h := self.hub
+	if h == nil {
 		return errors.New("Server initalized error")
 	}
 
-	errInit := hub.init()
+	errInit := h.init()
 	if errInit != nil {
 		return errInit
 	}
 
-	go hub.loadJobs() // Load exsiting jobs from store
+	go h.loadJobs() // Load exsiting jobs from store
 
-	http.HandleFunc("/", hub.httpHandler)
-	go self.listenHttp()
+	go h.listenHttp()
 
 	xlog.Outln("Server started")
 
@@ -59,19 +55,11 @@ func (self *server) start() error {
 	}
 
 end:
+	h.destroy()
+
 	xlog.Outln("Server stopped")
 	xlog.FlushAll()
 	xlog.CloseAll()
 
 	return nil
-}
-
-func (self *server) listenHttp() {
-	conf := config.GetConf()
-
-	errHttp := http.ListenAndServe(fmt.Sprintf(":%d", conf.HttpPort), nil)
-	if errHttp != nil {
-		xlog.Errln("Listern HTTP error", errHttp)
-		os.Exit(1)
-	}
 }

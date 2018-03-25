@@ -1,7 +1,6 @@
 package store
 
 import (
-	"os"
 	"path"
 	"testing"
 )

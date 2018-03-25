@@ -2,187 +2,195 @@ package job
 
 import (
 	"errors"
-	"github.com/tidwall/gjson"
 	"io/ioutil"
-	"math"
-	"strconv"
 	"strings"
 	"time"
-)
 
-const (
-	maxDuration = time.Duration(math.MaxInt64)
+	"github.com/tidwall/gjson"
+
+	"../../xlog"
+	"../analyzers"
+	"../fetchers"
+	"../rule"
+	"../sink"
+	"../target"
 )
 
 type Job struct {
-	Title string
-	Rule  string
-
+	Title    string
 	Interval time.Duration
 	Delay    time.Duration
+
+	rule *rule.Rule
+
+	targets           map[uint64]*target.Target
+	targetCrawledChan chan *target.Target
+
+	sinkChan          chan<- *sink.SinkPack
+	sinkChanConnected bool //
 }
 
-func NewJob(title string, rule string) (*Job, error) {
+func NewJob(title string, ruleContent string) (*Job, error) {
+	rule, err := rule.NewRuleWithContent(ruleContent)
+	if err != nil {
+		return nil, err
+	}
+
+	interval, errInterval := rule.GetInterval()
+	if errInterval != nil {
+		return nil, errInterval
+	}
+
+	delay, errDelay := rule.GetDelay()
+	if errDelay != nil {
+		return nil, errDelay
+	}
+
 	job := &Job{
-		Title: title,
-		Rule:  rule,
+		Title:    title,
+		Interval: interval,
+		Delay:    delay,
 
-		Interval: time.Hour,
-		Delay:    0,
+		rule: rule,
+
+		targets:           map[uint64]*target.Target{},
+		targetCrawledChan: make(chan *target.Target, 100),
+
+		sinkChanConnected: false,
 	}
-
-	// Parse $every
-	every := gjson.Get(rule, "$every") // 5s | 10m | 1h
-	if every.Exists() {
-		str := strings.ToLower(every.String())
-		duration, err := parseDuration(str)
-		if err != nil {
-			return nil, errors.New("Parse $every error")
-		}
-
-		job.Interval = duration
-	} else {
-		return nil, errors.New("Job must have $every definition")
-	}
-
-	// Parse $startDay and $startDayTime
-	now := time.Now()
-	nextTime := time.Now()
-	startDay := gjson.Get(rule, "$startDay") // w0 | m15 | y125
-	if startDay.Exists() {
-		str := strings.ToLower(startDay.String())
-		if strings.HasPrefix(str, "w") { // Sunday = 0, ..., 6
-			weekDay, err := strconv.Atoi(strings.TrimPrefix(str, "w"))
-			if err != nil {
-				return nil, err
-			}
-
-			if weekDay < 0 || weekDay > 6 {
-				return nil, errors.New("$startDay out of range")
-			}
-
-			currentWeekDay := int(nextTime.Weekday())
-			if weekDay > currentWeekDay {
-				nextTime = nextTime.AddDate(0, 0, weekDay-currentWeekDay)
-			} else if weekDay < currentWeekDay {
-				nextTime = nextTime.AddDate(0, 0, 7+weekDay-currentWeekDay)
-			}
-		} else if strings.HasPrefix(str, "m") { // 1, 2, ..., 30
-			monthDay, err := strconv.Atoi(strings.TrimPrefix(str, "m"))
-			if err != nil {
-				return nil, err
-			}
-
-			if monthDay < 1 || monthDay > 30 {
-				return nil, errors.New("$startDay out of range")
-			}
-
-			currentMonthDay := nextTime.Day()
-			if monthDay > currentMonthDay {
-				nextTime = nextTime.AddDate(0, 0, monthDay-currentMonthDay)
-			} else if monthDay < currentMonthDay {
-				nextTime = nextTime.AddDate(0, 1, monthDay-currentMonthDay)
-			}
-		} else if strings.HasPrefix(str, "y") { // 1, 2, ..., 365
-			yearDay, err := strconv.Atoi(strings.TrimPrefix(str, "y"))
-			if err != nil {
-				return nil, err
-			}
-
-			if yearDay < 1 || yearDay > 365 {
-				return nil, errors.New("$startDay out of range")
-			}
-
-			currentYearDay := nextTime.YearDay()
-			if yearDay > currentYearDay {
-				nextTime = nextTime.AddDate(0, 0, yearDay-currentYearDay)
-			} else if yearDay < currentYearDay {
-				nextTime = nextTime.AddDate(1, 0, yearDay-currentYearDay)
-			}
-		}
-	}
-	startDayTime := gjson.Get(rule, "$startDayTime") // 19:00:00
-	if startDayTime.Exists() {
-		str := startDayTime.String()
-		timeOfDay, err := time.Parse("15:04:05", str)
-		if err != nil {
-			return nil, err
-		}
-
-		h, m, s := timeOfDay.Clock()
-		dur := time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(s)*time.Second
-		ch, cm, cs := nextTime.Clock()
-		currentDur := time.Duration(ch)*time.Hour + time.Duration(cm)*time.Minute + time.Duration(cs)*time.Second
-
-		if dur < currentDur {
-			nextTime = nextTime.AddDate(0, 0, 1)
-		}
-		nextTime = nextTime.Add(dur - currentDur)
-	}
-	job.Delay = nextTime.Sub(now)
 
 	return job, nil
 }
 
 func NewJobWithFile(title string, rulePath string) (*Job, error) {
-	bytes, err := ioutil.ReadFile(rulePath)
+	b, err := ioutil.ReadFile(rulePath)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewJob(title, string(bytes))
+	return NewJob(title, string(b))
 }
 
-func parseDuration(str string) (time.Duration, error) { // 5s | 30m | 1h | 2d
-	if strings.HasSuffix(str, "s") {
-		sec, err := strconv.Atoi(strings.TrimSuffix(str, "s"))
-		if err != nil {
-			return maxDuration, err
-		}
-
-		if sec <= 0 {
-			return maxDuration, errors.New("Duration must greater than zero")
-		}
-
-		return time.Duration(sec) * time.Second, nil
-	} else if strings.HasSuffix(str, "m") {
-		min, err := strconv.Atoi(strings.TrimSuffix(str, "m"))
-		if err != nil {
-			return maxDuration, err
-		}
-
-		if min <= 0 {
-			return maxDuration, errors.New("Duration must greater than zero")
-		}
-
-		return time.Duration(min) * time.Minute, nil
-	} else if strings.HasSuffix(str, "h") {
-		hour, err := strconv.Atoi(strings.TrimSuffix(str, "h"))
-		if err != nil {
-			return maxDuration, err
-		}
-
-		if hour <= 0 {
-			return maxDuration, errors.New("Duration must greater than zero")
-		}
-
-		return time.Duration(hour) * time.Hour, nil
-	} else if strings.HasSuffix(str, "d") {
-		day, err := strconv.Atoi(strings.TrimSuffix(str, "d"))
-		if err != nil {
-			return maxDuration, err
-		}
-
-		if day <= 0 {
-			return maxDuration, errors.New("Duration must greater than zero")
-		}
-
-		return time.Duration(day) * time.Hour, nil
+func (self *Job) Run() {
+	entriesElem := self.rule.GetEntries()
+	if !entriesElem.Exists() {
+		return
 	}
 
-	return maxDuration, errors.New("Wrong format")
+	xlog.Outf("Job \"%s\" start to crawl\n", self.Title)
+
+	// Start to crawl targets
+	entriesElem.ForEach(func(keyElem, entryElem gjson.Result) bool {
+		entry := target.NewEntryWithJson(entryElem)
+		targetTemplateElem := self.rule.GetTargetTemplate(entry.Name)
+		if targetTemplateElem.Exists() {
+			t := target.NewTargetWithJson(targetTemplateElem)
+			if t != nil {
+				t.Url = entry.Url
+				self.startCrawlTarget(t)
+			}
+		}
+
+		return true
+	})
+
+	// Check all targets crawled
+	for {
+		if len(self.targets) == 0 {
+			break
+		}
+
+		select {
+		case t := <-self.targetCrawledChan:
+			self.analyze(t)
+		}
+	}
+
+	xlog.Outf("Job \"%s\" finished crawling\n", self.Title)
 }
 
-func (self *Job) Fn() {
+func (self *Job) ConnectSink(sink *sink.Sink) {
+	self.sinkChan = sink.C
+	self.sinkChanConnected = true
+}
 
+func (self *Job) startCrawlTarget(t *target.Target) {
+	if t != nil {
+		self.targets[t.GetId()] = t
+
+		go func() {
+			t.Crawl()
+			self.targetCrawledChan <- t
+		}()
+	}
+}
+
+func (self *Job) retryCrawlTarget(t *target.Target) {
+	if t != nil {
+		go func() {
+			delay := t.RetryWait
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+
+			t.Crawl()
+			self.targetCrawledChan <- t
+		}()
+	}
+}
+
+func (self *Job) analyze(t *target.Target) {
+	var err error = nil // Crawled target maybe have fetch error, parse error, etc.
+
+	defer func() {
+		if err != nil && t.CanRetry() {
+			self.retryCrawlTarget(t)
+		}
+	}()
+
+	err = t.GetErr() // Fetch error
+	if err != nil {
+		return
+	}
+
+	result := t.GetResult()
+	if result == nil {
+		err = errors.New("Got nothing from target")
+		return
+	}
+
+	var analyzerResult *analyzers.Result
+
+	contentType := strings.ToLower(t.ContentType)
+	if contentType == "html" {
+		htmlAnalyzer := analyzers.NewHtmlAnalyzer(self.rule)
+
+		if result.Format == fetchers.ResultFormat_Bytes {
+			analyzerResult, err = htmlAnalyzer.ParseBytes(result.Content.([]byte), t)
+			if err != nil {
+				return
+			}
+		}
+
+	} else if contentType == "json" {
+
+		if result.Format == fetchers.ResultFormat_Bytes {
+			//json := gjson.ParseBytes(result.Content.([]byte))
+		}
+
+	}
+
+	if analyzerResult != nil {
+		for _, t := range analyzerResult.Targets {
+			self.startCrawlTarget(t)
+		}
+
+		if self.sinkChanConnected {
+			for _, pack := range analyzerResult.SinkPacks {
+				self.sinkChan <- pack
+			}
+		}
+	}
+
+	delete(self.targets, t.GetId())
 }

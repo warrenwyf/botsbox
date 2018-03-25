@@ -38,6 +38,7 @@ func (self *BrowserFetcher) Fetch() (*Result, error) {
 		}
 
 		return &Result{
+			Hash:    self.Hash(),
 			Format:  ResultFormat_Browser,
 			Content: browser,
 		}, nil
@@ -46,12 +47,12 @@ func (self *BrowserFetcher) Fetch() (*Result, error) {
 	return nil, nil
 }
 
-func (self *BrowserFetcher) SetUrl(v string) {
-	self.url = v
+func (self *BrowserFetcher) SetUrl(p *string) {
+	self.url = *p
 }
 
-func (self *BrowserFetcher) SetMethod(v string) {
-	self.method = v
+func (self *BrowserFetcher) SetMethod(p *string) {
+	self.method = *p
 }
 
 func (self *BrowserFetcher) SetQuery(p *map[string]string) {
@@ -62,8 +63,8 @@ func (self *BrowserFetcher) SetForm(p *map[string]string) {
 	self.form = *p
 }
 
-func (self *BrowserFetcher) SetContentType(v string) {
-	self.contentType = v
+func (self *BrowserFetcher) SetContentType(p *string) {
+	self.contentType = *p
 }
 
 func (self *BrowserFetcher) Hash() string {
