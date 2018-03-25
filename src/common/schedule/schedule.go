@@ -1,9 +1,11 @@
 package schedule
 
 import (
-	"github.com/petar/GoLLRB/llrb"
+	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/petar/GoLLRB/llrb"
 )
 
 type Schedule struct {
@@ -13,7 +15,9 @@ type Schedule struct {
 
 	taskIdSeq       uint64
 	taskMap         map[uint64]*Task
+	taskMapMutex    sync.Mutex
 	taskTree        *llrb.LLRB
+	taskTreeMutex   sync.Mutex
 	taskUpdatedChan chan *Task
 
 	paused     bool
@@ -29,11 +33,10 @@ func NewSchedule() *Schedule {
 		tick: time.Second,
 
 		taskIdSeq:       0,
-		taskMap:         make(map[uint64]*Task),
+		taskMap:         map[uint64]*Task{},
 		taskTree:        llrb.New(),
 		taskUpdatedChan: make(chan *Task, 1000),
 
-		paused:     false,
 		pauseChan:  make(chan struct{}),
 		resumeChan: make(chan struct{}),
 		stopChan:   make(chan struct{}),
@@ -41,11 +44,9 @@ func NewSchedule() *Schedule {
 }
 
 func (self *Schedule) CreateTask(title string, fn func(), interval time.Duration, delay time.Duration) uint64 {
-	now := time.Now()
-
 	atomic.AddUint64(&self.taskIdSeq, 1)
 
-	t := &Task{
+	task := &Task{
 		id: self.taskIdSeq,
 
 		title:    title,
@@ -53,27 +54,40 @@ func (self *Schedule) CreateTask(title string, fn func(), interval time.Duration
 		interval: interval,
 		delay:    delay,
 
-		nextTime: now.Add(delay),
+		nextTime: time.Now().Add(delay),
 
 		executing:   false,
 		updatedChan: self.taskUpdatedChan,
 	}
 
-	self.taskTree.InsertNoReplace(t)
-	if self.taskTree.Has(t) {
-		self.taskMap[t.id] = t
-		return t.id
+	self.taskTreeMutex.Lock()
+	self.taskTree.InsertNoReplace(task)
+	ok := self.taskTree.Has(task)
+	self.taskTreeMutex.Unlock()
+
+	if ok {
+		self.taskMapMutex.Lock()
+		self.taskMap[task.id] = task
+		self.taskMapMutex.Unlock()
+
+		return task.id
 	}
 
 	return 0
 }
 
 func (self *Schedule) DeleteTask(id uint64) bool {
-	t, ok := self.taskMap[id]
+	task, ok := self.taskMap[id]
 	if ok {
-		item := self.taskTree.Delete(t)
+		self.taskTreeMutex.Lock()
+		item := self.taskTree.Delete(task)
+		self.taskTreeMutex.Unlock()
+
 		if item != nil {
+			self.taskMapMutex.Lock()
 			delete(self.taskMap, id)
+			self.taskMapMutex.Unlock()
+
 			return true
 		} else {
 			return false
@@ -81,6 +95,16 @@ func (self *Schedule) DeleteTask(id uint64) bool {
 	}
 
 	return false
+}
+
+func (self *Schedule) Clear() {
+	self.taskMapMutex.Lock()
+	self.taskMap = map[uint64]*Task{}
+	self.taskMapMutex.Unlock()
+
+	self.taskTreeMutex.Lock()
+	self.taskTree = llrb.New()
+	self.taskTreeMutex.Unlock()
 }
 
 func (self *Schedule) AllTasks() map[uint64]*Task {
@@ -111,6 +135,9 @@ func (self *Schedule) Stop() {
 	self.stopChan <- signal
 }
 
+/**
+ * goroutine loop
+ */
 func (self *Schedule) loop() {
 	var (
 		fakeTask = &Task{} // For quering in taskTree
@@ -130,7 +157,21 @@ pause:
 		select {
 		case <-ticker.C:
 			fakeTask.nextTime = time.Now()
-			self.taskTree.DescendLessOrEqual(fakeTask, self.execTaskIter)
+
+			tasks := []*Task{}
+			self.taskTree.DescendLessOrEqual(fakeTask, func(item llrb.Item) bool {
+				task, ok := item.(*Task)
+				tasks = append(tasks, task)
+				return ok
+			})
+
+			for _, task := range tasks {
+				self.taskTreeMutex.Lock()
+				self.taskTree.Delete(task)
+				self.taskTreeMutex.Unlock()
+
+				go task.exec()
+			}
 
 		case <-self.pauseChan:
 			goto pause
@@ -144,12 +185,12 @@ end:
 }
 
 func (self *Schedule) readTaskChan() {
-	var updatedTask *Task
-
 	for {
 		select {
-		case updatedTask = <-self.taskUpdatedChan:
+		case updatedTask := <-self.taskUpdatedChan:
+			self.taskTreeMutex.Lock()
 			self.taskTree.ReplaceOrInsert(updatedTask)
+			self.taskTreeMutex.Unlock()
 
 		default:
 			goto end
@@ -157,16 +198,4 @@ func (self *Schedule) readTaskChan() {
 	}
 
 end:
-}
-
-func (self *Schedule) execTaskIter(item llrb.Item) bool {
-	t, ok := item.(*Task)
-	if !ok {
-		return false
-	}
-
-	self.taskTree.Delete(t)
-	go t.exec()
-
-	return true
 }

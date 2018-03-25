@@ -2,7 +2,6 @@ package schedule
 
 import (
 	"github.com/petar/GoLLRB/llrb"
-	"log"
 	"time"
 )
 
@@ -48,9 +47,7 @@ func (self *Task) exec() {
 
 	go func() {
 		defer func() {
-			if err := recover(); err != nil {
-				log.Println("Recovering", err)
-			}
+			recover()
 		}()
 
 		self.executing = true
