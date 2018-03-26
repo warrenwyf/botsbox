@@ -73,6 +73,10 @@ func (h *hub) loadJobs() {
 
 	jobsCount := 0
 	for _, jobObj := range jobObjs {
+		if jobObj["status"].(string) != "alive" {
+			continue
+		}
+
 		job, err := job.NewJob(jobObj["title"].(string), jobObj["rule"].(string))
 		if err != nil {
 			xlog.Errln("Load job failed:", jobObj, err)

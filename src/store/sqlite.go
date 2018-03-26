@@ -131,7 +131,7 @@ func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int
 }
 
 func (self *SqliteStore) QueryAllJobs() (jobs []map[string]interface{}, err error) {
-	sql := fmt.Sprintf(`SELECT "_id","title","rule" FROM "%s"`, JobDataset)
+	sql := fmt.Sprintf(`SELECT "_id","title","rule","status" FROM "%s"`, JobDataset)
 
 	rows, errSql := self.db.Query(sql)
 	if errSql != nil {
@@ -142,20 +142,22 @@ func (self *SqliteStore) QueryAllJobs() (jobs []map[string]interface{}, err erro
 	objects := []map[string]interface{}{}
 	for rows.Next() {
 		var (
-			_id   int
-			title string
-			rule  string
+			_id    int
+			title  string
+			rule   string
+			status string
 		)
 
-		errSql = rows.Scan(&_id, &title, &rule)
+		errSql = rows.Scan(&_id, &title, &rule, &status)
 		if errSql != nil {
 			return nil, errSql
 		}
 
 		objects = append(objects, map[string]interface{}{
-			"_id":   _id,
-			"title": title,
-			"rule":  rule,
+			"_id":    _id,
+			"title":  title,
+			"rule":   rule,
+			"status": status,
 		})
 	}
 
