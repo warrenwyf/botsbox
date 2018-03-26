@@ -9,7 +9,7 @@ type Entry struct {
 	Url  string
 }
 
-func NewEntryWithJson(elem gjson.Result) *Entry {
+func NewEntryWithJson(elem *gjson.Result) *Entry {
 	entry := &Entry{}
 
 	nameElem := elem.Get("$name")

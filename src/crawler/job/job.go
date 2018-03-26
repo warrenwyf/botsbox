@@ -80,11 +80,11 @@ func (self *Job) Run() {
 	xlog.Outf("Job \"%s\" start to crawl\n", self.Title)
 
 	// Start to crawl targets
-	entriesElem.ForEach(func(keyElem, entryElem gjson.Result) bool {
-		entry := target.NewEntryWithJson(entryElem)
+	entriesElem.ForEach(func(kElem, vElem gjson.Result) bool {
+		entry := target.NewEntryWithJson(&vElem)
 		targetTemplateElem := self.rule.GetTargetTemplate(entry.Name)
 		if targetTemplateElem.Exists() {
-			t := target.NewTargetWithJson(targetTemplateElem)
+			t := target.NewTargetWithJson(&targetTemplateElem)
 			if t != nil {
 				t.Url = entry.Url
 				self.startCrawlTarget(t)
@@ -145,6 +145,8 @@ func (self *Job) analyze(t *target.Target) {
 	defer func() {
 		if err != nil && t.CanRetry() {
 			self.retryCrawlTarget(t)
+
+			xlog.Errln("Analyze error:", err)
 		}
 	}()
 
@@ -176,6 +178,19 @@ func (self *Job) analyze(t *target.Target) {
 
 		if result.Format == fetchers.ResultFormat_Bytes {
 			//json := gjson.ParseBytes(result.Content.([]byte))
+		}
+
+	} else if contentType == "webp" ||
+		contentType == "jpg" ||
+		contentType == "jpeg" ||
+		contentType == "png" ||
+		contentType == "bmp" ||
+		contentType == "gif" {
+		binaryAnalyzer := analyzers.NewBinaryAnalyzer(self.rule)
+
+		analyzerResult, err = binaryAnalyzer.Parse(result.Content.([]byte), t)
+		if err != nil {
+			return
 		}
 
 	}

@@ -33,8 +33,10 @@ type Target struct {
 	Form        map[string]string
 	ContentType string
 
-	Dive    map[string]*Entry
-	Outputs []*Output
+	Dive map[string]*Entry
+
+	ObjectOutputs []*ObjectOutput
+	ListOutputs   []*ListOutput
 
 	result *fetchers.Result
 	err    error
@@ -48,20 +50,24 @@ func NewTarget() *Target {
 		tried: 0,
 		level: 0,
 
-		Age:       time.Duration(24) * time.Hour,
+		Age:       24 * time.Hour,
 		Priority:  0,
 		Retry:     3,
 		RetryWait: time.Minute,
 
 		Method:      "GET",
+		Query:       map[string]string{},
+		Form:        map[string]string{},
 		ContentType: "html",
 
-		Dive:    map[string]*Entry{},
-		Outputs: []*Output{},
+		Dive: map[string]*Entry{},
+
+		ObjectOutputs: []*ObjectOutput{},
+		ListOutputs:   []*ListOutput{},
 	}
 }
 
-func NewTargetWithJson(elem gjson.Result) *Target {
+func NewTargetWithJson(elem *gjson.Result) *Target {
 	t := NewTarget()
 
 	ageElem := elem.Get("$age")
@@ -96,18 +102,21 @@ func NewTargetWithJson(elem gjson.Result) *Target {
 
 	diveElem := elem.Get("$dive")
 	if diveElem.Exists() {
-		dive := diveElem.Map()
-		if dive != nil {
-			for k, v := range dive {
-				t.Dive[k] = NewEntryWithJson(v)
-			}
-		}
+		diveElem.ForEach(func(kElem, vElem gjson.Result) bool {
+			t.Dive[kElem.String()] = NewEntryWithJson(&vElem)
+			return true
+		})
 	}
 
 	outputsElem := elem.Get("$outputs")
 	if outputsElem.Exists() {
-		outputsElem.ForEach(func(keyElem, ouputElem gjson.Result) bool {
-			t.Outputs = append(t.Outputs, NewOutputWithJson(ouputElem))
+		outputsElem.ForEach(func(_, outputElem gjson.Result) bool {
+			if outputElem.Get("$each").Exists() { // ListOutput
+				t.ListOutputs = append(t.ListOutputs, NewListOutputWithJson(&outputElem))
+			} else {
+				t.ObjectOutputs = append(t.ObjectOutputs, NewObjectOutputWithJson(&outputElem))
+			}
+
 			return true
 		})
 	}
@@ -155,6 +164,7 @@ func (self *Target) Crawl() {
 
 	if fetcher == nil {
 		self.err = errors.New("No supported fetcher")
+		return
 	}
 
 	self.result, self.err = fetcher.Fetch()

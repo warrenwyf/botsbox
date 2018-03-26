@@ -1,18 +1,10 @@
 package sink
 
-import (
-	"encoding/json"
-)
-
 type SinkPack struct {
-	Name string
-	Hash string
-	Url  string
-	Data map[string]interface{}
-	File []byte
-}
-
-func (self *SinkPack) GetDataAsJson() (string, error) {
-	bytes, err := json.Marshal(self.Data)
-	return string(bytes), err
+	Name    string
+	Hash    string
+	Url     string
+	Data    map[string]interface{}
+	File    []byte
+	FileExt string
 }
