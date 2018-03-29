@@ -172,6 +172,11 @@ func (self *Job) analyze(t *target.Target) {
 			if err != nil {
 				return
 			}
+		} else if result.Format == fetchers.ResultFormat_Browser {
+			analyzerResult, err = htmlAnalyzer.ParseBrowser(result.Content.([]byte), t)
+			if err != nil {
+				return
+			}
 		}
 
 	} else if contentType == "json" {

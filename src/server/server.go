@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"

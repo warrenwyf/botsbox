@@ -1,10 +1,10 @@
 package fetchers
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/headzoo/surf/browser"
 )
 
 func Test_BrowserFetcher_Hash(t *testing.T) {
@@ -30,9 +30,12 @@ func Test_BrowserFetcher_Get(t *testing.T) {
 		t.Fatalf(`Fetch "%s" error: %v`, url, errFetch)
 	}
 
-	b := result.Content.(*browser.Browser)
+	doc, errParse := goquery.NewDocumentFromReader(bytes.NewReader(result.Content.([]byte)))
+	if errParse != nil {
+		t.Fatalf(`Parse html content error: %v`, errParse)
+	}
 
-	elems := b.Find("#header .logo img")
+	elems := doc.Find("#header .logo img")
 	if elems.Length() == 0 {
 		t.Fatalf(`No logo exists`)
 	}

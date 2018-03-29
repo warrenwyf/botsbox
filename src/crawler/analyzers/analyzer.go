@@ -95,7 +95,7 @@ func relUrlToAbs(relUrl string, parentUrl string) string {
  * $[selector].$html
  * $[selector].$attr[href]
  */
-func extractHtmlValue(doc *goquery.Document, pipeline string) string {
+func extractHtmlValue(doc *goquery.Selection, pipeline string) string {
 	if pipeline == "$raw" {
 		html, err := doc.Html()
 		if err == nil {
@@ -114,29 +114,6 @@ func extractHtmlValue(doc *goquery.Document, pipeline string) string {
 		}
 
 		s := doc.Find(selector).First()
-		return actOnSelection(s, action)
-
-	}
-
-	return ""
-}
-
-func extractHtmlElementValue(element *goquery.Selection, pipeline string) string {
-	if pipeline == "$raw" {
-		html, err := element.Html()
-		if err == nil {
-			return html
-		}
-
-	} else {
-		selectorStr := regAction.FindString(pipeline)
-		selector := strings.TrimSuffix(strings.TrimPrefix(selectorStr, "$["), "]")
-		action := strings.TrimPrefix(strings.TrimPrefix(pipeline, selectorStr), ".$")
-		if len(selector) == 0 || len(action) == 0 {
-			return ""
-		}
-
-		s := element.Find(selector).First()
 		return actOnSelection(s, action)
 
 	}

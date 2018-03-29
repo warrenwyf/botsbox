@@ -26,6 +26,7 @@ type Target struct {
 	Retry     int64
 	RetryWait time.Duration
 	Mtag      string
+	Client    string
 
 	Url         string
 	Method      string
@@ -100,6 +101,11 @@ func NewTargetWithJson(elem *gjson.Result) *Target {
 		}
 	}
 
+	clientElem := elem.Get("$client")
+	if clientElem.Exists() {
+		t.Client = clientElem.String()
+	}
+
 	diveElem := elem.Get("$dive")
 	if diveElem.Exists() {
 		diveElem.ForEach(func(kElem, vElem gjson.Result) bool {
@@ -152,14 +158,30 @@ func (self *Target) Crawl() {
 
 	url := strings.ToLower(self.Url)
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-		httpFetcher := fetchers.NewHttpFetcher()
-		httpFetcher.SetUrl(&self.Url)
-		httpFetcher.SetMethod(&self.Method)
-		httpFetcher.SetQuery(&self.Query)
-		httpFetcher.SetForm(&self.Form)
-		httpFetcher.SetContentType(&self.ContentType)
 
-		fetcher = httpFetcher
+		client := strings.ToLower(self.Client)
+		if client == "browser" {
+			browserFetcher := fetchers.NewBrowserFetcher()
+			browserFetcher.SetUrl(self.Url)
+			browserFetcher.SetMethod(self.Method)
+			browserFetcher.SetQuery(self.Query)
+			browserFetcher.SetForm(self.Form)
+			browserFetcher.SetContentType(self.ContentType)
+
+			fetcher = browserFetcher
+
+		} else {
+			httpFetcher := fetchers.NewHttpFetcher()
+			httpFetcher.SetUrl(self.Url)
+			httpFetcher.SetMethod(self.Method)
+			httpFetcher.SetQuery(self.Query)
+			httpFetcher.SetForm(self.Form)
+			httpFetcher.SetContentType(self.ContentType)
+
+			fetcher = httpFetcher
+
+		}
+
 	}
 
 	if fetcher == nil {

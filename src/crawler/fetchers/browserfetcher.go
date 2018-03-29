@@ -1,15 +1,18 @@
 package fetchers
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
-	"github.com/headzoo/surf"
-
+	"../../common/browser"
+	"../../common/mhtml"
 	"../../common/util"
 )
 
 type BrowserFetcher struct {
+	timeout     time.Duration
 	url         string
 	method      string
 	query       map[string]string
@@ -19,6 +22,7 @@ type BrowserFetcher struct {
 
 func NewBrowserFetcher() *BrowserFetcher {
 	return &BrowserFetcher{
+		timeout:     120 * time.Second,
 		method:      "GET",
 		contentType: "html",
 	}
@@ -31,40 +35,51 @@ func (self *BrowserFetcher) Fetch() (*Result, error) {
 			url = fmt.Sprintf("%s?%s", url, joinQueryString(self.query))
 		}
 
-		browser := surf.NewBrowser()
-		err := browser.Open(url)
-		if err != nil {
-			return nil, err
+		page := browser.NewPage()
+		if page == nil {
+			return nil, errors.New("Can not new page")
+		}
+		defer page.Close()
+
+		page.Load(url, self.timeout)
+		html := mhtml.GetHtml(page.ExportMHtml())
+
+		if html == nil {
+			return nil, errors.New("Nothing got via browser")
 		}
 
 		return &Result{
 			Hash:    self.Hash(),
 			Format:  ResultFormat_Browser,
-			Content: browser,
+			Content: html,
 		}, nil
 	}
 
 	return nil, nil
 }
 
-func (self *BrowserFetcher) SetUrl(p *string) {
-	self.url = *p
+func (self *BrowserFetcher) SetTimeout(v time.Duration) {
+	self.timeout = v
 }
 
-func (self *BrowserFetcher) SetMethod(p *string) {
-	self.method = *p
+func (self *BrowserFetcher) SetUrl(v string) {
+	self.url = v
 }
 
-func (self *BrowserFetcher) SetQuery(p *map[string]string) {
-	self.query = *p
+func (self *BrowserFetcher) SetMethod(v string) {
+	self.method = v
 }
 
-func (self *BrowserFetcher) SetForm(p *map[string]string) {
-	self.form = *p
+func (self *BrowserFetcher) SetQuery(v map[string]string) {
+	self.query = v
 }
 
-func (self *BrowserFetcher) SetContentType(p *string) {
-	self.contentType = *p
+func (self *BrowserFetcher) SetForm(v map[string]string) {
+	self.form = v
+}
+
+func (self *BrowserFetcher) SetContentType(v string) {
+	self.contentType = v
 }
 
 func (self *BrowserFetcher) Hash() string {

@@ -5,11 +5,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"../../common/util"
 )
 
 type HttpFetcher struct {
+	timeout     time.Duration
 	url         string
 	method      string
 	query       map[string]string
@@ -19,6 +21,7 @@ type HttpFetcher struct {
 
 func NewHttpFetcher() *HttpFetcher {
 	return &HttpFetcher{
+		timeout:     120 * time.Second,
 		method:      "GET",
 		contentType: "html",
 	}
@@ -31,7 +34,10 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 			url = fmt.Sprintf("%s?%s", url, joinQueryString(self.query))
 		}
 
-		resp, err := http.Get(url)
+		client := http.Client{
+			Timeout: self.timeout,
+		}
+		resp, err := client.Get(url)
 		if err != nil {
 			return nil, err
 		}
@@ -52,24 +58,28 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 	return nil, nil
 }
 
-func (self *HttpFetcher) SetUrl(p *string) {
-	self.url = *p
+func (self *HttpFetcher) SetTimeout(v time.Duration) {
+	self.timeout = v
 }
 
-func (self *HttpFetcher) SetMethod(p *string) {
-	self.method = *p
+func (self *HttpFetcher) SetUrl(v string) {
+	self.url = v
 }
 
-func (self *HttpFetcher) SetQuery(p *map[string]string) {
-	self.query = *p
+func (self *HttpFetcher) SetMethod(v string) {
+	self.method = v
 }
 
-func (self *HttpFetcher) SetForm(p *map[string]string) {
-	self.form = *p
+func (self *HttpFetcher) SetQuery(v map[string]string) {
+	self.query = v
 }
 
-func (self *HttpFetcher) SetContentType(p *string) {
-	self.contentType = *p
+func (self *HttpFetcher) SetForm(v map[string]string) {
+	self.form = v
+}
+
+func (self *HttpFetcher) SetContentType(v string) {
+	self.contentType = v
 }
 
 func (self *HttpFetcher) Hash() string {

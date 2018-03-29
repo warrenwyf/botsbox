@@ -22,12 +22,25 @@ func NewHtmlAnalyzer(rule *rule.Rule) *HtmlAnalyzer {
 	}
 }
 
+func (self *HtmlAnalyzer) ParseBrowser(b []byte, baseTarget *target.Target) (*Result, error) {
+	doc, errParse := goquery.NewDocumentFromReader(bytes.NewReader(b))
+	if errParse != nil { // Parse error
+		return nil, errParse
+	}
+
+	return self.parseDoc(doc.Selection, baseTarget)
+}
+
 func (self *HtmlAnalyzer) ParseBytes(b []byte, baseTarget *target.Target) (*Result, error) {
 	doc, errParse := goquery.NewDocumentFromReader(bytes.NewReader(b))
 	if errParse != nil { // Parse error
 		return nil, errParse
 	}
 
+	return self.parseDoc(doc.Selection, baseTarget)
+}
+
+func (self *HtmlAnalyzer) parseDoc(doc *goquery.Selection, baseTarget *target.Target) (*Result, error) {
 	result := &Result{
 		Targets:   []*target.Target{},
 		SinkPacks: []*sink.SinkPack{},
@@ -69,7 +82,7 @@ func (self *HtmlAnalyzer) ParseBytes(b []byte, baseTarget *target.Target) (*Resu
 			continue
 		}
 
-		targets, packs := self.packListOutput(doc, listOutput, baseTarget)
+		targets, packs := self.parseListOutput(doc, listOutput, baseTarget)
 
 		result.Targets = append(result.Targets, targets...)
 		result.SinkPacks = append(result.SinkPacks, packs...)
@@ -78,7 +91,7 @@ func (self *HtmlAnalyzer) ParseBytes(b []byte, baseTarget *target.Target) (*Resu
 	return result, nil
 }
 
-func (self *HtmlAnalyzer) parseObjectOutput(doc *goquery.Document, output *target.ObjectOutput, baseTarget *target.Target) ([]*target.Target, *sink.SinkPack) {
+func (self *HtmlAnalyzer) parseObjectOutput(doc *goquery.Selection, output *target.ObjectOutput, baseTarget *target.Target) ([]*target.Target, *sink.SinkPack) {
 	name := output.Name
 	dataTpl := output.Data
 
@@ -117,7 +130,7 @@ func (self *HtmlAnalyzer) parseObjectOutput(doc *goquery.Document, output *targe
 	return targets, pack
 }
 
-func (self *HtmlAnalyzer) packListOutput(doc *goquery.Document, output *target.ListOutput, baseTarget *target.Target) ([]*target.Target, []*sink.SinkPack) {
+func (self *HtmlAnalyzer) parseListOutput(doc *goquery.Selection, output *target.ListOutput, baseTarget *target.Target) ([]*target.Target, []*sink.SinkPack) {
 	name := output.Name
 	selector := output.Selector
 	dataTpl := output.Data
@@ -129,7 +142,7 @@ func (self *HtmlAnalyzer) packListOutput(doc *goquery.Document, output *target.L
 		data := map[string]interface{}{}
 
 		for k, pipeline := range dataTpl {
-			v := extractHtmlElementValue(s, pipeline)
+			v := extractHtmlValue(s, pipeline)
 			if len(v) == 0 {
 				continue
 			}
