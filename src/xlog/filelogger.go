@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -65,6 +66,13 @@ func NewFileLoggerWithOptions(fileName string, bufferSize int, chanSize int, flu
 		buf:          &bytes.Buffer{},
 		file:         file,
 		fileOpenedAt: time.Now(),
+	}
+
+	fileInfo, errStat := os.Stat(fileName)
+	if errStat == nil {
+		stat := fileInfo.Sys().(*syscall.Stat_t)
+		createdAt := time.Unix(int64(stat.Birthtimespec.Sec), int64(stat.Birthtimespec.Nsec))
+		l.checkAndRotateFile(createdAt)
 	}
 
 	if flushInterval <= 0 {
@@ -169,10 +177,17 @@ func (self *FileLogger) writeFile() error {
 		return errWrite
 	}
 
-	// Rotate file
+	errRotate := self.checkAndRotateFile(self.fileOpenedAt)
+	if errRotate != nil {
+		return errRotate
+	}
+
+	return nil
+}
+
+func (self *FileLogger) checkAndRotateFile(t time.Time) error {
 	now := time.Now()
-	openedAt := self.fileOpenedAt
-	sameDay := (now.Year() == openedAt.Year() && now.Month() == openedAt.Month() && now.Day() == openedAt.Day())
+	sameDay := (now.Year() == t.Year() && now.Month() == t.Month() && now.Day() == t.Day())
 	if !sameDay {
 		errRotate := self.rotateFile()
 		if errRotate != nil {

@@ -42,16 +42,18 @@ func (self *server) start() error {
 	xlog.Outln("Server started")
 
 	// Wait for system signal
-	signal.Notify(self.sigChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(self.sigChan, syscall.SIGINT, syscall.SIGTERM,
+		syscall.SIGABRT, syscall.SIGSEGV, syscall.SIGBUS, syscall.SIGILL)
 	for {
-		select {
-		case sig := <-self.sigChan:
-			switch sig {
-			case syscall.SIGINT:
-				goto end
-			case syscall.SIGTERM:
-				goto end
-			}
+		sig := <-self.sigChan
+
+		switch sig {
+		case syscall.SIGINT:
+			goto end
+		case syscall.SIGTERM:
+			goto end
+		default:
+			xlog.Errln(sig)
 		}
 	}
 

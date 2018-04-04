@@ -6,12 +6,13 @@ type Fetcher interface {
 }
 
 type Result struct {
-	Hash    string
-	Format  int
-	Content interface{}
+	Hash        string
+	Format      int
+	Content     interface{}
+	ContentType string
 }
 
 const (
 	ResultFormat_Bytes = iota
-	ResultFormat_Browser
+	ResultFormat_String
 )

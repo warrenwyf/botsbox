@@ -1,12 +1,14 @@
-package target
+package rule
 
 import (
 	"github.com/tidwall/gjson"
 )
 
 type ListOutput struct {
-	Name     string
+	Name string
+
 	Selector string
+	Id       string
 	Data     map[string]string
 }
 
@@ -27,6 +29,11 @@ func NewListOutputWithJson(elem *gjson.Result) *ListOutput {
 	eachElem := elem.Get("$each")
 	if eachElem.Exists() {
 		output.Selector = eachElem.String()
+	}
+
+	idElem := elem.Get("$id")
+	if idElem.Exists() {
+		output.Id = idElem.String()
 	}
 
 	dataElem := elem.Get("$data")

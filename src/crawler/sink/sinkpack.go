@@ -1,9 +1,10 @@
 package sink
 
 type SinkPack struct {
-	Name    string
+	Name string
+
+	Id      string
 	Hash    string
-	Url     string
 	Data    map[string]interface{}
 	File    []byte
 	FileExt string

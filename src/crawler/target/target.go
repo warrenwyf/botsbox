@@ -6,10 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/tidwall/gjson"
-
-	"../../common/util"
 	"../fetchers"
+	"../rule"
 )
 
 var (
@@ -17,121 +15,101 @@ var (
 )
 
 type Target struct {
-	id    uint64
-	tried int64
-	level uint
+	id        uint64
+	tried     int64
+	level     uint
+	hash      string
+	createdAt time.Time
+
+	Url        string
+	Method     string
+	Header     map[string]string
+	Query      map[string]string
+	Form       map[string]string
+	ResultType string
+	ApplyedVar map[string]string
 
 	Age       time.Duration
 	Priority  int64
+	Timeout   time.Duration
 	Retry     int64
 	RetryWait time.Duration
 	Mtag      string
 	Client    string
 
-	Url         string
-	Method      string
-	Query       map[string]string
-	Form        map[string]string
-	ContentType string
+	Dive map[string]*rule.Entry
 
-	Dive map[string]*Entry
-
-	ObjectOutputs []*ObjectOutput
-	ListOutputs   []*ListOutput
+	ObjectOutputs []*rule.ObjectOutput
+	ListOutputs   []*rule.ListOutput
 
 	result *fetchers.Result
 	err    error
+}
+
+func NewTargetWithTemplate(template *rule.TargetTemplate) *Target {
+	t := NewTarget()
+
+	t.Age = template.Age
+	t.Priority = template.Priority
+	t.Timeout = template.Timeout
+	t.Retry = template.Retry
+	t.RetryWait = template.RetryWait
+	t.Mtag = template.Mtag
+	t.Client = template.Client
+
+	t.Dive = template.Dive
+
+	t.ObjectOutputs = template.ObjectOutputs
+	t.ListOutputs = template.ListOutputs
+
+	return t
 }
 
 func NewTarget() *Target {
 	atomic.AddUint64(&idSeq, 1)
 
 	return &Target{
-		id:    idSeq,
-		tried: 0,
-		level: 0,
+		id:        idSeq,
+		tried:     0,
+		level:     0,
+		createdAt: time.Now(),
+
+		Method:     "GET",
+		Header:     map[string]string{},
+		Query:      map[string]string{},
+		Form:       map[string]string{},
+		ResultType: "html",
+		ApplyedVar: map[string]string{},
 
 		Age:       24 * time.Hour,
 		Priority:  0,
+		Timeout:   0,
 		Retry:     3,
 		RetryWait: time.Minute,
 
-		Method:      "GET",
-		Query:       map[string]string{},
-		Form:        map[string]string{},
-		ContentType: "html",
+		Dive: map[string]*rule.Entry{},
 
-		Dive: map[string]*Entry{},
-
-		ObjectOutputs: []*ObjectOutput{},
-		ListOutputs:   []*ListOutput{},
+		ObjectOutputs: []*rule.ObjectOutput{},
+		ListOutputs:   []*rule.ListOutput{},
 	}
 }
 
-func NewTargetWithJson(elem *gjson.Result) *Target {
-	t := NewTarget()
+func (self *Target) Higher(compare interface{}) bool { // Used by PriorityQueue
+	other := compare.(*Target)
 
-	ageElem := elem.Get("$age")
-	if ageElem.Exists() {
-		age, err := util.ParseDuration(ageElem.String())
-		if err == nil {
-			t.Age = age
-		}
+	if self.Priority == other.Priority {
+		return self.createdAt.Before(other.createdAt)
 	}
 
-	priorityElem := elem.Get("$priority")
-	if priorityElem.Exists() {
-		priority := priorityElem.Int()
-		if priority >= 0 {
-			t.Priority = priority
-		}
-	}
-
-	retryElem := elem.Get("$retry")
-	if retryElem.Exists() {
-		retry := retryElem.Int()
-		t.Retry = retry // Minus means do not retry
-	}
-
-	retryWaitElem := elem.Get("$retryWait")
-	if retryWaitElem.Exists() {
-		retryWait, err := util.ParseDuration(retryWaitElem.String())
-		if err == nil {
-			t.RetryWait = retryWait
-		}
-	}
-
-	clientElem := elem.Get("$client")
-	if clientElem.Exists() {
-		t.Client = clientElem.String()
-	}
-
-	diveElem := elem.Get("$dive")
-	if diveElem.Exists() {
-		diveElem.ForEach(func(kElem, vElem gjson.Result) bool {
-			t.Dive[kElem.String()] = NewEntryWithJson(&vElem)
-			return true
-		})
-	}
-
-	outputsElem := elem.Get("$outputs")
-	if outputsElem.Exists() {
-		outputsElem.ForEach(func(_, outputElem gjson.Result) bool {
-			if outputElem.Get("$each").Exists() { // ListOutput
-				t.ListOutputs = append(t.ListOutputs, NewListOutputWithJson(&outputElem))
-			} else {
-				t.ObjectOutputs = append(t.ObjectOutputs, NewObjectOutputWithJson(&outputElem))
-			}
-
-			return true
-		})
-	}
-
-	return t
+	return self.Priority > other.Priority
 }
 
 func (self *Target) GetId() uint64 {
 	return self.id
+}
+
+func (self *Target) GetHash() string {
+	return self.hash
 }
 
 func (self *Target) GetResult() *fetchers.Result {
@@ -164,9 +142,13 @@ func (self *Target) Crawl() {
 			browserFetcher := fetchers.NewBrowserFetcher()
 			browserFetcher.SetUrl(self.Url)
 			browserFetcher.SetMethod(self.Method)
+			browserFetcher.SetHeader(self.Header)
 			browserFetcher.SetQuery(self.Query)
 			browserFetcher.SetForm(self.Form)
-			browserFetcher.SetContentType(self.ContentType)
+			browserFetcher.SetResultType(self.ResultType)
+			if self.Timeout > 0 {
+				browserFetcher.SetTimeout(self.Timeout)
+			}
 
 			fetcher = browserFetcher
 
@@ -174,9 +156,13 @@ func (self *Target) Crawl() {
 			httpFetcher := fetchers.NewHttpFetcher()
 			httpFetcher.SetUrl(self.Url)
 			httpFetcher.SetMethod(self.Method)
+			httpFetcher.SetHeader(self.Header)
 			httpFetcher.SetQuery(self.Query)
 			httpFetcher.SetForm(self.Form)
-			httpFetcher.SetContentType(self.ContentType)
+			httpFetcher.SetResultType(self.ResultType)
+			if self.Timeout > 0 {
+				httpFetcher.SetTimeout(self.Timeout)
+			}
 
 			fetcher = httpFetcher
 
@@ -188,6 +174,8 @@ func (self *Target) Crawl() {
 		self.err = errors.New("No supported fetcher")
 		return
 	}
+
+	self.hash = fetcher.Hash()
 
 	self.result, self.err = fetcher.Fetch()
 }

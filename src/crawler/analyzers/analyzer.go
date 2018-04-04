@@ -6,8 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/PuerkitoBio/goquery"
-
+	"../rule"
 	"../sink"
 	"../target"
 )
@@ -17,44 +16,9 @@ var (
 )
 
 type Result struct {
+	Mtag      string
 	Targets   []*target.Target
 	SinkPacks []*sink.SinkPack
-}
-
-func actOnSelection(s *goquery.Selection, action string) string {
-	if s == nil {
-		return ""
-	}
-
-	if action == "text" { // $text
-		return s.Text()
-
-	} else if action == "html" { // $html
-		html, err := s.Html()
-		if err == nil {
-			return html
-		}
-
-	} else if strings.HasPrefix(action, "attr[") && strings.HasSuffix(action, "]") { // $attr[href]
-		attrName := strings.TrimSuffix(strings.TrimPrefix(action, "attr["), "]")
-		attr, attrExist := s.Attr(attrName)
-		if attrExist {
-			return attr
-		}
-
-	}
-
-	return ""
-}
-
-func actOnUrl(u string, s *goquery.Selection, parentUrl string) string {
-	str := strings.TrimSpace(u)
-	if strings.HasPrefix(str, "$") && s != nil {
-		action := strings.TrimPrefix(str, "$")
-		str = actOnSelection(s, action)
-	}
-
-	return relUrlToAbs(str, parentUrl)
 }
 
 func relUrlToAbs(relUrl string, parentUrl string) string {
@@ -88,48 +52,15 @@ func relUrlToAbs(relUrl string, parentUrl string) string {
 	return abs.String()
 }
 
-/**
- * $raw
- * $title
- * $[selector].$text
- * $[selector].$html
- * $[selector].$attr[href]
- */
-func extractHtmlValue(doc *goquery.Selection, pipeline string) string {
-	if pipeline == "$raw" {
-		html, err := doc.Html()
-		if err == nil {
-			return html
-		}
-
-	} else if pipeline == "$title" {
-		return doc.Find("title").Text()
-
-	} else {
-		selectorStr := regAction.FindString(pipeline)
-		selector := strings.TrimSuffix(strings.TrimPrefix(selectorStr, "$["), "]")
-		action := strings.TrimPrefix(strings.TrimPrefix(pipeline, selectorStr), ".$")
-		if len(selector) == 0 || len(action) == 0 {
-			return ""
-		}
-
-		s := doc.Find(selector).First()
-		return actOnSelection(s, action)
-
-	}
-
-	return ""
-}
-
-func newFileTarget(dir string, url string, contentType string) *target.Target {
+func newFileTarget(dir string, url string, resultType string) *target.Target {
 	t := target.NewTarget()
 	t.Url = url
-	t.ContentType = contentType
+	t.ResultType = resultType
 
-	output := target.NewObjectOutput()
+	output := rule.NewObjectOutput()
 	output.Name = dir
 
-	t.ObjectOutputs = []*target.ObjectOutput{output}
+	t.ObjectOutputs = []*rule.ObjectOutput{output}
 
 	return t
 }

@@ -1,12 +1,30 @@
 package fetchers
 
 import (
-	"bytes"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
-
-	"github.com/PuerkitoBio/goquery"
-	//"github.com/tidwall/gjson"
 )
+
+var (
+	server *httptest.Server
+)
+
+func Test_SetupServer(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(res http.ResponseWriter, req *http.Request) {
+		if strings.ToUpper(req.Method) == "GET" {
+			res.Write([]byte("get ok"))
+		} else if strings.ToUpper(req.Method) == "POST" {
+			b, _ := ioutil.ReadAll(req.Body)
+			res.Write(b)
+		}
+	})
+
+	server = httptest.NewServer(mux)
+}
 
 func Test_HttpFetcher_Hash(t *testing.T) {
 	f1 := NewHttpFetcher()
@@ -21,33 +39,39 @@ func Test_HttpFetcher_Hash(t *testing.T) {
 }
 
 func Test_HttpFetcher_Get(t *testing.T) {
-	url := "https://news.baidu.com/"
-
 	f := NewHttpFetcher()
-	f.SetUrl(url)
+	f.SetUrl(server.URL)
 
 	result, errFetch := f.Fetch()
 	if errFetch != nil {
-		t.Fatalf(`Fetch "%s" error: %v`, url, errFetch)
+		t.Fatalf(`Get error: %v`, errFetch)
 	}
 
-	doc, errParse := goquery.NewDocumentFromReader(bytes.NewReader(result.Content.([]byte)))
-	if errParse != nil {
-		t.Fatalf(`Parse html content error: %v`, errParse)
+	if string(result.Content.([]byte)) != "get ok" {
+		t.Fatal("Get result wrong")
+	}
+}
+
+func Test_HttpFetcher_Post(t *testing.T) {
+	data := map[string]string{
+		"foo": "bar",
 	}
 
-	elems := doc.Find("#header .logo img")
-	if elems.Length() == 0 {
-		t.Fatalf(`No logo exists`)
+	f := NewHttpFetcher()
+	f.SetUrl(server.URL)
+	f.SetMethod("POST")
+	f.SetForm(data)
+
+	result, errFetch := f.Fetch()
+	if errFetch != nil {
+		t.Fatalf(`Post error: %v`, errFetch)
 	}
 
-	elems.Each(func(i int, s *goquery.Selection) {
-		src, ok := s.Attr("src")
-		if ok {
-			t.Logf("#logo has src: %v", src)
-		} else {
-			t.Fatalf(`No src in logo`)
-		}
-	})
+	if string(result.Content.([]byte)) != "foo=bar" {
+		t.Fatal("Post result wrong")
+	}
+}
 
+func Test_DestroyServer(t *testing.T) {
+	server.Close()
 }

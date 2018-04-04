@@ -40,4 +40,9 @@ func Test_PriorityQueue(t *testing.T) {
 		item := q.Pop().(*Item)
 		t.Log(item.id, item.priority, item.createdAt)
 	}
+
+	left := q.Len()
+	if left > 0 {
+		t.Error("No item should be left")
+	}
 }

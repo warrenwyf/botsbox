@@ -23,20 +23,22 @@ func NewSink() *Sink {
 	}
 }
 
-func (self *Sink) Open(store store.Store) {
-	go self.loop(store)
+func (self *Sink) Open() {
+	go self.loop()
 }
 
-func (self *Sink) loop(store store.Store) {
+func (self *Sink) loop() {
+	s := store.GetStore()
+
 	for {
 		select {
 		case sinkPack := <-self.C:
 
 			if len(sinkPack.Data) > 0 { // Save to store
 				datasetName := sinkPack.Name
-				if !store.HasDataset(datasetName) {
-					err := store.CreateDataset(datasetName,
-						[]string{"url", "hash", "data", "createdAt"},
+				if !s.HasDataset(datasetName) {
+					err := s.CreateDataset(datasetName,
+						[]string{"id", "hash", "data", "createdAt"},
 						[]string{"text", "text", "text", "timestamp DEFAULT CURRENT_TIMESTAMP"})
 					if err != nil {
 						xlog.Errln("Create dataset", datasetName, "error:", err)
@@ -48,9 +50,9 @@ func (self *Sink) loop(store store.Store) {
 					xlog.Errln("SinkPack marshal error:", errMarshal)
 				}
 
-				_, err := store.InsertObject(datasetName,
-					[]string{"url", "hash", "data"},
-					[]interface{}{sinkPack.Url, sinkPack.Hash, jsonData})
+				_, err := s.InsertObject(datasetName,
+					[]string{"id", "hash", "data"},
+					[]interface{}{sinkPack.Id, sinkPack.Hash, jsonData})
 				if err != nil {
 					xlog.Errln("Insert into dataset", datasetName, "error:", err)
 				}
@@ -61,9 +63,9 @@ func (self *Sink) loop(store store.Store) {
 				dirPath := path.Join(runtime.GetAbsDataDir(), dirName)
 				os.MkdirAll(dirPath, 0755)
 
-				fileName := sinkPack.Url
-				fileName = strings.Replace(fileName, string(os.PathSeparator), "_", 0)
-				fileName = strings.Replace(fileName, string(os.PathListSeparator), "_", 0)
+				fileName := sinkPack.Id
+				fileName = strings.Replace(fileName, string(os.PathSeparator), "_", -1)
+				fileName = strings.Replace(fileName, string(os.PathListSeparator), "_", -1)
 
 				ext := strings.ToLower(filepath.Ext(fileName))
 				if ext != strings.ToLower(sinkPack.FileExt) {
@@ -71,9 +73,13 @@ func (self *Sink) loop(store store.Store) {
 				}
 
 				filePath := path.Join(dirPath, fileName)
-				err := ioutil.WriteFile(filePath, sinkPack.File, 0755)
-				if err != nil {
-					xlog.Errln("Write file", filePath, "error:", err)
+				if _, errStat := os.Stat(filePath); errStat == nil {
+					xlog.Errln("File", filePath, "exists")
+				} else {
+					err := ioutil.WriteFile(filePath, sinkPack.File, 0755)
+					if err != nil {
+						xlog.Errln("Write file", filePath, "error:", err)
+					}
 				}
 			}
 

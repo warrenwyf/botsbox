@@ -1,6 +1,7 @@
 package analyzers
 
 import (
+	"../../common/util"
 	"../rule"
 	"../sink"
 	"../target"
@@ -19,6 +20,8 @@ func NewBinaryAnalyzer(rule *rule.Rule) *BinaryAnalyzer {
 func (self *BinaryAnalyzer) Parse(b []byte, baseTarget *target.Target) (*Result, error) {
 	result := &Result{}
 
+	result.Mtag = util.Md5Bytes(b)
+
 	baseResult := baseTarget.GetResult()
 
 	// Analyze outputs
@@ -28,10 +31,10 @@ func (self *BinaryAnalyzer) Parse(b []byte, baseTarget *target.Target) (*Result,
 		if len(name) > 0 {
 			pack := &sink.SinkPack{
 				Name:    name,
+				Id:      baseTarget.Url,
 				Hash:    baseResult.Hash,
-				Url:     baseTarget.Url,
 				File:    b,
-				FileExt: "." + baseTarget.ContentType,
+				FileExt: "." + baseTarget.ResultType,
 			}
 
 			result.SinkPacks = append(result.SinkPacks, pack)

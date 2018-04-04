@@ -1,4 +1,4 @@
-package target
+package rule
 
 import (
 	"github.com/tidwall/gjson"
@@ -6,6 +6,8 @@ import (
 
 type ObjectOutput struct {
 	Name string
+
+	Id   string
 	Data map[string]string
 }
 
@@ -21,6 +23,11 @@ func NewObjectOutputWithJson(elem *gjson.Result) *ObjectOutput {
 	nameElem := elem.Get("$name")
 	if nameElem.Exists() {
 		output.Name = nameElem.String()
+	}
+
+	idElem := elem.Get("$id")
+	if idElem.Exists() {
+		output.Id = idElem.String()
 	}
 
 	dataElem := elem.Get("$data")

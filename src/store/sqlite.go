@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -33,6 +34,12 @@ func (self *SqliteStore) Init() error {
 	self.CreateDataset(JobDataset,
 		[]string{"_id", "title", "rule"},
 		[]string{"integer not null primary key", "text not null", "text not null"})
+
+	self.CreateDataset(TargetDataset,
+		[]string{"_id", "hash", "mtag", "createdAt"},
+		[]string{"integer not null primary key", "text not null", "text not null", "timestamp DEFAULT CURRENT_TIMESTAMP"})
+	self.createIndex(TargetDataset, "hash")
+	self.createIndex(TargetDataset, "createdAt")
 
 	return nil
 }
@@ -169,9 +176,58 @@ func (self *SqliteStore) QueryAllJobs() (jobs []map[string]interface{}, err erro
 	return objects, nil
 }
 
+func (self *SqliteStore) GetLatestTarget(hash string) (target map[string]interface{}, err error) {
+	sql := fmt.Sprintf(`SELECT "_id","hash","mtag","createdAt" FROM "%s" WHERE hash=? ORDER BY createdAt DESC LIMIT 1`, TargetDataset)
+
+	rows, errSql := self.db.Query(sql, hash)
+	if errSql != nil {
+		return nil, errSql
+	}
+	defer rows.Close()
+
+	var object map[string]interface{} = nil
+	if rows.Next() {
+		var (
+			_id       int
+			hash      string
+			mtag      string
+			createdAt time.Time
+		)
+
+		errSql = rows.Scan(&_id, &hash, &mtag, &createdAt)
+		if errSql != nil {
+			return nil, errSql
+		}
+
+		object = map[string]interface{}{
+			"_id":       _id,
+			"hash":      hash,
+			"mtag":      mtag,
+			"createdAt": createdAt,
+		}
+	}
+
+	errSql = rows.Err()
+	if errSql != nil {
+		return nil, errSql
+	}
+
+	return object, nil
+}
+
 func (self *SqliteStore) Destroy() error {
 	if self.db != nil {
 		self.db.Close()
+	}
+
+	return nil
+}
+
+func (self *SqliteStore) createIndex(datasetName string, fieldName string) error {
+	sql := fmt.Sprintf(`CREATE INDEX IF NOT EXISTS "idx_%s_%s" ON "%s" ("%s" DESC)`, datasetName, fieldName, datasetName, fieldName)
+	_, errSql := self.db.Exec(sql)
+	if errSql != nil {
+		return errSql
 	}
 
 	return nil

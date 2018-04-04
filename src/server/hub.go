@@ -17,14 +17,12 @@ import (
 )
 
 type hub struct {
-	store    store.Store
 	sink     *sink.Sink
 	schedule *schedule.Schedule
 }
 
 func newHub() *hub {
 	h := &hub{
-		store:    store.NewStore(),
 		sink:     sink.NewSink(),
 		schedule: schedule.NewSchedule(),
 	}
@@ -33,12 +31,12 @@ func newHub() *hub {
 }
 
 func (h *hub) init() error {
-	errStore := h.store.Init()
+	errStore := store.GetStore().Init()
 	if errStore != nil {
 		return errStore
 	}
 
-	h.sink.Open(h.store)
+	h.sink.Open()
 
 	h.schedule.Start()
 
@@ -47,7 +45,8 @@ func (h *hub) init() error {
 
 func (h *hub) destroy() {
 	h.schedule.Stop()
-	h.store.Destroy()
+
+	store.GetStore().Destroy()
 }
 
 func (h *hub) listenHttp() {
@@ -65,7 +64,7 @@ func (h *hub) listenHttp() {
 }
 
 func (h *hub) loadJobs() {
-	jobObjs, err := h.store.QueryAllJobs()
+	jobObjs, err := store.GetStore().QueryAllJobs()
 	if err != nil {
 		xlog.Errln("Query jobs failed:", err)
 		return

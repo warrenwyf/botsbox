@@ -13,3 +13,9 @@ func Md5(v interface{}) string {
 	h.Write(bytes)
 	return hex.EncodeToString(h.Sum(nil))
 }
+
+func Md5Bytes(bytes []byte) string {
+	h := md5.New()
+	h.Write(bytes)
+	return hex.EncodeToString(h.Sum(nil))
+}
