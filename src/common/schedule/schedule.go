@@ -43,20 +43,17 @@ func NewSchedule() *Schedule {
 	}
 }
 
-func (self *Schedule) CreateTask(title string, fn func(), interval time.Duration, delay time.Duration) uint64 {
+func (self *Schedule) CreateTask(runnable Runnable) uint64 {
 	atomic.AddUint64(&self.taskIdSeq, 1)
 
 	task := &Task{
 		id: self.taskIdSeq,
 
-		title:    title,
-		fn:       fn,
-		interval: interval,
-		delay:    delay,
+		runnable: runnable,
 
-		nextTime: time.Now().Add(delay),
-
-		executing:   false,
+		interval:    runnable.GetInterval(),
+		nextTime:    time.Now().Add(runnable.GetDelay()),
+		running:     false,
 		updatedChan: self.taskUpdatedChan,
 	}
 
@@ -170,7 +167,7 @@ pause:
 				self.taskTree.Delete(task)
 				self.taskTreeMutex.Unlock()
 
-				go task.exec()
+				go task.run()
 			}
 
 		case <-self.pauseChan:

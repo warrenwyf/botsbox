@@ -17,14 +17,14 @@ import (
 )
 
 type hub struct {
-	sink     *sink.Sink
-	schedule *schedule.Schedule
+	sink        *sink.Sink
+	jobSchedule *schedule.Schedule
 }
 
 func newHub() *hub {
 	h := &hub{
-		sink:     sink.NewSink(),
-		schedule: schedule.NewSchedule(),
+		sink:        sink.NewSink(),
+		jobSchedule: schedule.NewSchedule(),
 	}
 
 	return h
@@ -38,13 +38,13 @@ func (h *hub) init() error {
 
 	h.sink.Open()
 
-	h.schedule.Start()
+	h.jobSchedule.Start()
 
 	return nil
 }
 
 func (h *hub) destroy() {
-	h.schedule.Stop()
+	h.jobSchedule.Stop()
 
 	store.GetStore().Destroy()
 }
@@ -84,7 +84,7 @@ func (h *hub) loadJobs() {
 
 		job.ConnectSink(h.sink)
 
-		taskId := h.schedule.CreateTask(job.Title, job.Run, job.Interval, job.Delay)
+		taskId := h.jobSchedule.CreateTask(job)
 		if taskId > 0 {
 			jobsCount++
 		}
@@ -94,7 +94,7 @@ func (h *hub) loadJobs() {
 }
 
 func (h *hub) allJobTasks() map[uint64]*schedule.Task {
-	return h.schedule.AllTasks()
+	return h.jobSchedule.AllTasks()
 }
 
 func (h *hub) httpHandler(w http.ResponseWriter, r *http.Request) {
@@ -115,11 +115,15 @@ func (h *hub) httpHandler(w http.ResponseWriter, r *http.Request) {
 
 		tasks := h.allJobTasks()
 		for _, task := range tasks {
+			job := task.GetRunnable().(*job.Job)
 			jobs = append(jobs, map[string]interface{}{
-				"title":    task.GetTitle(),
-				"interval": task.GetInterval().Seconds(),
-				"next":     task.GetNextTime().UTC().Unix(),
-				"running":  task.IsExecuting(),
+				"title":    job.GetTitle(),
+				"interval": job.GetInterval().Seconds(),
+				"runAt":    job.GetRunAt().UTC().Unix(),
+				"crawled":  job.GetCrawledTargetsCount(),
+
+				"next":    task.GetNextTime().UTC().Unix(),
+				"running": task.IsRunning(),
 			})
 		}
 

@@ -17,12 +17,12 @@ import (
 )
 
 type Job struct {
-	Title string
+	title    string
+	interval time.Duration
+	delay    time.Duration
 
-	Timeout     time.Duration
-	Interval    time.Duration
-	Delay       time.Duration
-	Concurrency int
+	timeout     time.Duration
+	concurrency int
 
 	rule *rule.Rule
 
@@ -44,12 +44,12 @@ func NewJob(title string, ruleContent string) (*Job, error) {
 	}
 
 	job := &Job{
-		Title: title,
+		title:    title,
+		interval: rule.Interval,
+		delay:    rule.Delay,
 
-		Timeout:     rule.Timeout,
-		Interval:    rule.Interval,
-		Delay:       rule.Delay,
-		Concurrency: rule.Concurrency,
+		timeout:     rule.Timeout,
+		concurrency: rule.Concurrency,
 
 		rule: rule,
 
@@ -74,8 +74,25 @@ func NewJobWithFile(title string, rulePath string) (*Job, error) {
 	return NewJob(title, string(b))
 }
 
-func (self *Job) Run() {
-	xlog.Outf("Job \"%s\" start to crawl\n", self.Title)
+func (self *Job) GetTitle() string {
+	return self.title
+}
+
+func (self *Job) GetFn() func() {
+	return self.fn
+}
+
+func (self *Job) GetInterval() time.Duration {
+	return self.interval
+}
+
+func (self *Job) GetDelay() time.Duration {
+	return self.delay
+}
+
+func (self *Job) fn() {
+
+	xlog.Outf("Job \"%s\" start to crawl\n", self.title)
 
 	self.runAt = time.Now()
 
@@ -99,7 +116,7 @@ func (self *Job) Run() {
 			break
 		}
 
-		if runningCount < self.Concurrency || self.Concurrency <= 0 {
+		if runningCount < self.concurrency || self.concurrency <= 0 {
 			if waitingCount > 0 {
 				t := self.targetsQueue.Pop().(*target.Target)
 				self.startCrawlTarget(t)
@@ -115,25 +132,29 @@ func (self *Job) Run() {
 		}
 
 		elapse := time.Now().Sub(self.runAt)
-		if elapse > self.Timeout {
-			xlog.Outf("Job \"%s\" did not finish crawling, timeout\n", self.Title)
+		if elapse > self.timeout {
+			xlog.Outf("Job \"%s\" did not finish crawling, timeout\n", self.title)
 			break
-		} else if elapse > self.Interval && self.crawledTargetsCount == 0 {
-			xlog.Outf("Job \"%s\" did not crawl anything during interval time\n", self.Title)
+		} else if elapse > self.interval && self.crawledTargetsCount == 0 {
+			xlog.Outf("Job \"%s\" did not crawl anything during interval time\n", self.title)
 			break
 		}
 	}
 
-	xlog.Outf("Job \"%s\" finished crawling\n", self.Title)
+	xlog.Outf("Job \"%s\" finished crawling\n", self.title)
+}
+
+func (self *Job) GetRunAt() time.Time {
+	return self.runAt
+}
+
+func (self *Job) GetCrawledTargetsCount() uint64 {
+	return self.crawledTargetsCount
 }
 
 func (self *Job) ConnectSink(sink *sink.Sink) {
 	self.sinkChan = sink.C
 	self.sinkChanConnected = true
-}
-
-func (self *Job) GetCrawledTargetsCount() uint64 {
-	return self.crawledTargetsCount
 }
 
 func (self *Job) startCrawlTarget(t *target.Target) {

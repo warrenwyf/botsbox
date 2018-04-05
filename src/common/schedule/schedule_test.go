@@ -10,17 +10,51 @@ import (
 
 var s = NewSchedule()
 
+type TestTask struct {
+	title    string
+	fn       func()
+	interval time.Duration
+	delay    time.Duration
+}
+
+func (t *TestTask) GetTitle() string {
+	return t.title
+}
+
+func (t *TestTask) GetFn() func() {
+	return t.fn
+}
+
+func (t *TestTask) GetInterval() time.Duration {
+	return t.interval
+}
+
+func (t *TestTask) GetDelay() time.Duration {
+	return t.delay
+}
+
 func Test_CreateAndDeleteTask(t *testing.T) {
 	s.Clear()
 
 	s.Start()
 
-	id1 := s.CreateTask("t1", func() {
-		t.Log(time.Now(), "Task 1 is executed")
-	}, 2*time.Second, 500*time.Millisecond)
-	id2 := s.CreateTask("t2", func() {
-		t.Log(time.Now(), "Task 2 is executed")
-	}, 4*time.Second, 500*time.Millisecond)
+	id1 := s.CreateTask(&TestTask{
+		title: "t1",
+		fn: func() {
+			t.Log(time.Now(), "Task 1 is executed")
+		},
+		interval: 2 * time.Second,
+		delay:    500 * time.Millisecond,
+	})
+
+	id2 := s.CreateTask(&TestTask{
+		title: "t2",
+		fn: func() {
+			t.Log(time.Now(), "Task 2 is executed")
+		},
+		interval: 4 * time.Second,
+		delay:    500 * time.Millisecond,
+	})
 
 	time.Sleep(10 * time.Second)
 
@@ -40,9 +74,16 @@ func Test_TaskExecuted(t *testing.T) {
 	t.Log("Start add tasks", time.Now())
 	count := 1000
 	for i := 0; i < count; i++ {
-		s.CreateTask("", func() {
-			atomic.AddInt32(&executed, 1)
-		}, time.Hour, time.Duration(rand.Intn(10))*time.Second)
+
+		s.CreateTask(&TestTask{
+			title: "",
+			fn: func() {
+				atomic.AddInt32(&executed, 1)
+			},
+			interval: time.Hour,
+			delay:    time.Duration(rand.Intn(10)) * time.Second,
+		})
+
 	}
 	t.Log("Finish add tasks", time.Now())
 
@@ -70,9 +111,15 @@ func Benchmark_CreateTask(b *testing.B) {
 	for i := 0; i < count; i++ {
 		title := fmt.Sprintf("t%d", i)
 		log := fmt.Sprintf("BenchTask %d is executed", i)
-		id := s.CreateTask(title, func() {
-			b.Log(time.Now(), log)
-		}, time.Second, time.Duration(rand.Intn(10))*time.Second)
+
+		id := s.CreateTask(&TestTask{
+			title: title,
+			fn: func() {
+				b.Log(time.Now(), log)
+			},
+			interval: time.Second,
+			delay:    time.Duration(rand.Intn(10)) * time.Second,
+		})
 
 		b.Logf("BenchTask %d has id %d ", i, id)
 	}

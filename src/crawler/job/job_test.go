@@ -50,7 +50,3 @@ func Test_NewJob(t *testing.T) {
 
 	job = j
 }
-
-func Test_Run(t *testing.T) {
-	job.Run()
-}
