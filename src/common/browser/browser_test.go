@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 }
 
 func Test_Browser_Concurrency(t *testing.T) {
-	count := 100
+	count := 10
 
 	var noTitleCount uint64 = 0
 	var noHtmlCount uint64 = 0

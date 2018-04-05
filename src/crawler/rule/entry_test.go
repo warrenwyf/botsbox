@@ -16,7 +16,7 @@ func Test_Parameterized(t *testing.T) {
 		"$form": {
 			"params": "{\"limit\":20,\"offset\":$var[offset]}"
 		},
-		"$contentType": "json",
+		"$resultType": "json",
 		"$var": {
 			"offset": "$[0, 20, 40, 60, 80, 100]",
 			"offset": "$rangeInt[0, 100, 50]"
@@ -44,8 +44,8 @@ func Test_Parameterized(t *testing.T) {
 		t.Fatal("Form error:", entry.Form)
 	}
 
-	if entry.ContentType != "json" {
-		t.Fatal("ContentType error:", entry.ContentType)
+	if entry.ResultType != "json" {
+		t.Fatal("ResultType error:", entry.ResultType)
 	}
 
 	offsetVar, _ := entry.Var["offset"]
