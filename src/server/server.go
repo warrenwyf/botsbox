@@ -2,18 +2,29 @@ package server
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"../app"
+	"../config"
+	"../web"
 	"../xlog"
 )
 
+var s *server
+
 func Start() error {
-	s := &server{
+	if s != nil {
+		s.destroy()
+	}
+
+	s = &server{
 		sigChan: make(chan os.Signal),
-		hub:     newHub(),
+		hub:     app.GetHub(),
 	}
 
 	return s.start()
@@ -21,23 +32,25 @@ func Start() error {
 
 type server struct {
 	sigChan chan os.Signal
-	hub     *hub
+	hub     *app.Hub
 }
 
 func (self *server) start() error {
 	h := self.hub
 	if h == nil {
-		return errors.New("Server initalized error")
+		return errors.New("App initalized error")
 	}
 
-	errInit := h.init()
+	errInit := h.Init()
 	if errInit != nil {
 		return errInit
 	}
 
-	go h.loadJobs() // Load exsiting jobs from store
+	go self.startDebug()
 
-	go h.listenHttp()
+	go web.Start()
+
+	go h.LoadJobs() // Load exsiting jobs from store
 
 	xlog.Outln("Server started")
 
@@ -58,11 +71,34 @@ func (self *server) start() error {
 	}
 
 end:
-	h.destroy()
+	self.destroy()
 
 	xlog.Outln("Server stopped")
 	xlog.FlushAll()
 	xlog.CloseAll()
 
 	return nil
+}
+
+func (self *server) destroy() {
+	h := self.hub
+	if h != nil {
+		h.Destroy()
+	}
+
+	close(self.sigChan)
+}
+
+func (self *server) startDebug() {
+	conf := config.GetConf()
+
+	if conf.DebugPort > 0 {
+		err := http.ListenAndServe(fmt.Sprintf(":%d", conf.DebugPort), nil)
+		if err != nil {
+			xlog.Errln("Start debug error", err)
+			xlog.FlushAll()
+			xlog.CloseAll()
+			os.Exit(1)
+		}
+	}
 }

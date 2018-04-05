@@ -1,5 +1,6 @@
 {
 	"http_port": 6075,
+	"debug_port": 0,
 	"store_type": "mongo",
 	"store_conn": "localhost:27017",
 	"store_name": "botsbox"

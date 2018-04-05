@@ -12,6 +12,7 @@ go get github.com/PuerkitoBio/goquery
 go get github.com/gotk3/gotk3/gtk
 go get github.com/mattn/go-sqlite3
 go get gopkg.in/mgo.v2
+go get github.com/labstack/echo/...
 
 echo "go build ..."
 go build -o bin/botsbox src/main.go

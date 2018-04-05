@@ -13,6 +13,7 @@ var (
 
 type Conf struct {
 	HttpPort  int    `json:"http_port"`
+	DebugPort int    `json:"debug_port"`
 	StoreType string `json:"store_type"`
 	StoreConn string `json:"store_conn"`
 	StoreName string `json:"store_name"`
@@ -37,6 +38,7 @@ func GetConf() *Conf {
 	once.Do(func() {
 		confSingleton = &Conf{ // Default configuration
 			HttpPort:  6075,
+			DebugPort: 6076,
 			StoreType: "sqlite",
 			StoreConn: "./botsbox.db",
 		}
