@@ -2,6 +2,7 @@ package browser
 
 import (
 	"errors"
+	"runtime"
 	"time"
 
 	"github.com/gotk3/gotk3/glib"
@@ -12,10 +13,12 @@ import (
 type Page struct {
 	webView *webkit.WebView
 
-	loadChan chan struct{}
-	loadErr  error
+	loadChan       chan struct{}
+	loadChanClosed bool
 
-	loaded bool
+	loadErr error
+	loaded  bool
+
 	closed bool
 }
 
@@ -25,8 +28,7 @@ func (self *Page) Load(url string, timeout time.Duration) error {
 	}
 
 	self.loadChan = make(chan struct{})
-	self.loadErr = nil
-	self.loaded = false
+	self.loadChanClosed = false
 
 	glib.IdleAdd(func() bool {
 		if self.closed {
@@ -47,6 +49,7 @@ func (self *Page) Load(url string, timeout time.Duration) error {
 		t.Stop()
 	}
 
+	self.loadChanClosed = true
 	close(self.loadChan)
 
 	return self.loadErr
@@ -58,14 +61,19 @@ func (self *Page) GetTitle() string {
 	}
 
 	c := make(chan string)
+	cClosed := false
 
 	glib.IdleAdd(func() bool {
-		c <- self.webView.GetTitle()
+		if !cClosed {
+			c <- self.webView.GetTitle()
+		}
 
 		return false
 	})
 
 	title := <-c
+
+	cClosed = true
 	close(c)
 
 	return title
@@ -77,14 +85,11 @@ func (self *Page) ExportMHtml(timeout time.Duration) []byte {
 	}
 
 	c := make(chan []byte)
-	cClosed := false
+
+	var callbackHolder interface{}
 
 	glib.IdleAdd(func() bool {
-		self.webView.ExportMHtml(func(bytes []byte) {
-			if !cClosed {
-				c <- bytes
-			}
-		})
+		callbackHolder = self.webView.ExportMHtml(c)
 
 		return false
 	})
@@ -99,7 +104,8 @@ func (self *Page) ExportMHtml(timeout time.Duration) []byte {
 		t.Stop()
 	}
 
-	cClosed = true
+	runtime.KeepAlive(callbackHolder) // Avoid GC() callback
+
 	close(c)
 
 	return mhtml
@@ -110,6 +116,7 @@ func (self *Page) Close() {
 
 	glib.IdleAdd(func() bool {
 		self.webView.Destroy()
+		self.webView = nil
 
 		return false
 	})

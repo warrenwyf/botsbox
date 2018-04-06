@@ -68,9 +68,9 @@ func (self *Browser) CreatePage() *Page {
 				closed:  false,
 			}
 
-			widget := webView.GetGtk()
+			window := webView.GetWindow()
 
-			loadChangedHandler, _ := widget.Connect("load-changed",
+			loadChangedHandler, _ := window.Connect("load-changed",
 				func(_ *glib.Object, event int) {
 					defer func() {
 						if err := recover(); err != nil {
@@ -85,11 +85,13 @@ func (self *Browser) CreatePage() *Page {
 							page.loaded = true
 						}
 
-						page.loadChan <- sig
+						if !page.loadChanClosed {
+							page.loadChan <- sig
+						}
 					}
 				})
 
-			widget.Connect("load-failed",
+			window.Connect("load-failed",
 				func() {
 					defer func() {
 						if err := recover(); err != nil {
@@ -97,7 +99,7 @@ func (self *Browser) CreatePage() *Page {
 						}
 					}()
 
-					widget.HandlerDisconnect(loadChangedHandler)
+					window.HandlerDisconnect(loadChangedHandler)
 
 					if page.closed {
 						page.loadErr = errors.New("Page already closed")
@@ -105,7 +107,9 @@ func (self *Browser) CreatePage() *Page {
 						page.loadErr = errors.New("Page load failed")
 					}
 
-					page.loadChan <- sig
+					if !page.loadChanClosed {
+						page.loadChan <- sig
+					}
 				})
 
 			self.C <- page

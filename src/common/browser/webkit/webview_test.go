@@ -58,9 +58,13 @@ func Test_GetTitle(t *testing.T) {
 }
 
 func Test_ExportMHtml(t *testing.T) {
-	webView.ExportMHtml(func(bytes []byte) {
-		t.Log(bytes)
-	})
+	c := make(chan []byte)
+	webView.ExportMHtml(c)
+
+	go func() {
+		<-c
+		close(c)
+	}()
 }
 
 func Test_Destroy(t *testing.T) {

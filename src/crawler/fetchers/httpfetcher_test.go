@@ -15,6 +15,8 @@ var (
 func Test_SetupServer(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(res http.ResponseWriter, req *http.Request) {
+		defer req.Body.Close()
+
 		if strings.ToUpper(req.Method) == "GET" {
 			res.Write([]byte("get ok"))
 		} else if strings.ToUpper(req.Method) == "POST" {

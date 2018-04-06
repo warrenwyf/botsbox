@@ -3,16 +3,20 @@ package mhtml
 import (
 	"bufio"
 	"bytes"
-	"io"
+	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/textproto"
 )
 
 func GetHtml(mhtml []byte) []byte {
-	br := bufio.NewReader(bytes.NewReader(mhtml))
-	tr := textproto.NewReader(br)
+	if mhtml == nil {
+		return nil
+	}
 
+	br := bufio.NewReader(bytes.NewReader(mhtml))
+
+	tr := textproto.NewReader(br)
 	mimeHeader, err := tr.ReadMIMEHeader()
 	if err != nil {
 		return nil
@@ -46,13 +50,12 @@ func GetHtml(mhtml []byte) []byte {
 			continue
 		}
 
-		b := make([]byte, len(mhtml))
-		n, err := part.Read(b)
-		if err != nil && err != io.EOF {
+		b, err := ioutil.ReadAll(part)
+		if err != nil {
 			return nil
 		}
 
-		return b[:n]
+		return b
 	}
 
 	return nil

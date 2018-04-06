@@ -13,10 +13,16 @@ import (
 	"unsafe"
 )
 
+var asyncReadyCallback = C.GAsyncReadyCallback(C.my_g_async_ready_callback)
+
 //export goGAsyncReadyCallback
 func goGAsyncReadyCallback(result unsafe.Pointer, userData C.gpointer) {
 	cCallbackWrapper := (*C.callback_wrapper)(unsafe.Pointer(userData))
-	defer C.free_callback_wrapper(cCallbackWrapper) // Free C.make_callback_wrapper()
+
+	defer func() {
+		cCallbackWrapper.fn = nil
+		C.free_callback_wrapper(cCallbackWrapper) // Free C.make_callback_wrapper()
+	}()
 
 	fnPtr := (*func(*C.GAsyncResult))(cCallbackWrapper.fn)
 	cResult := (*C.GAsyncResult)(result)
@@ -24,8 +30,8 @@ func goGAsyncReadyCallback(result unsafe.Pointer, userData C.gpointer) {
 	(*fnPtr)(cResult)
 }
 
-func newGAsyncReadyCallback(fnPtr *func(*C.GAsyncResult)) (C.GAsyncReadyCallback, C.gpointer, error) {
-	if fnPtr == nil {
+func makeCallbackCgo(fn func(*C.GAsyncResult)) (C.gpointer, unsafe.Pointer, error) {
+	if fn == nil {
 		return nil, nil, errors.New("Callback can not be nil")
 	}
 
@@ -34,7 +40,9 @@ func newGAsyncReadyCallback(fnPtr *func(*C.GAsyncResult)) (C.GAsyncReadyCallback
 		return nil, nil, errors.New("New async callback failed")
 	}
 
-	cCallbackWrapper.fn = unsafe.Pointer(fnPtr)
+	callbackHolder := unsafe.Pointer(&fn)
 
-	return C.GAsyncReadyCallback(C.my_g_async_ready_callback), C.gpointer(unsafe.Pointer(cCallbackWrapper)), nil
+	cCallbackWrapper.fn = callbackHolder
+
+	return C.gpointer(unsafe.Pointer(cCallbackWrapper)), callbackHolder, nil
 }

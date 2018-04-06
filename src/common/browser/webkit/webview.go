@@ -19,6 +19,8 @@ import (
 
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+
+	"../../util"
 )
 
 const (
@@ -36,7 +38,7 @@ const (
 type WebView struct {
 	cWebView   *C.WebKitWebView
 	cGtkWidget *C.GtkWidget
-	gtkWidget  *gtk.Widget
+	window     *gtk.Widget
 
 	// cproxy *C.WebKitNetworkProxySettings
 }
@@ -49,7 +51,7 @@ func NewWebView() *WebView {
 	return &WebView{
 		cWebView:   cWebView,
 		cGtkWidget: cGtkWidget,
-		gtkWidget: &gtk.Widget{
+		window: &gtk.Widget{ // Offscreen window
 			glib.InitiallyUnowned{gobj},
 		},
 
@@ -58,8 +60,8 @@ func NewWebView() *WebView {
 }
 
 // Notice: only call in gtk thread
-func (self *WebView) GetGtk() *gtk.Widget {
-	return self.gtkWidget
+func (self *WebView) GetWindow() *gtk.Widget {
+	return self.window
 }
 
 func (self *WebView) GetSettings() *Settings {
@@ -90,14 +92,18 @@ func (self *WebView) GetTitle() string {
 	return C.GoString((*C.char)(C.webkit_web_view_get_title(self.cWebView)))
 }
 
-func (self *WebView) ExportMHtml(callback func([]byte)) {
-	if callback == nil {
-		return
+func (self *WebView) ExportMHtml(c chan<- []byte) unsafe.Pointer {
+	if c == nil {
+		return nil
 	}
 
-	asyncCallback := func(result *C.GAsyncResult) {
+	defer func() {
+		recover()
+	}()
+
+	var asyncCallback = func(result *C.GAsyncResult) {
 		if result == nil {
-			callback(nil)
+			c <- nil
 			return
 		}
 
@@ -105,12 +111,15 @@ func (self *WebView) ExportMHtml(callback func([]byte)) {
 		stream := C.webkit_web_view_save_finish(self.cWebView, result, nil /*&saveErr*/)
 		if stream == nil {
 			// C.g_error_free(saveErr)
-			callback(nil)
+			c <- nil
 			return
 
 		}
 
-		buf := bytes.Buffer{}
+		buf := util.BytesBufferPool.Get().(*bytes.Buffer)
+		defer util.BytesBufferPool.Put(buf)
+
+		buf.Reset()
 
 		for {
 			// var readErr *C.GError
@@ -134,16 +143,18 @@ func (self *WebView) ExportMHtml(callback func([]byte)) {
 
 		C.g_input_stream_close(stream, nil, nil)
 
-		callback(buf.Bytes())
+		c <- buf.Bytes()
 	}
 
-	cCallback, cUserData, err := newGAsyncReadyCallback(&asyncCallback)
+	callbackWrapper, callbackHolder, err := makeCallbackCgo(asyncCallback)
 	if err != nil {
-		callback(nil)
-		return
+		close(c)
+		return nil
 	}
 
-	C.webkit_web_view_save(self.cWebView, C.WEBKIT_SAVE_MODE_MHTML, nil, cCallback, cUserData)
+	C.webkit_web_view_save(self.cWebView, C.WEBKIT_SAVE_MODE_MHTML, nil, asyncReadyCallback, callbackWrapper)
+
+	return callbackHolder
 }
 
 // Notice: only call in gtk thread
@@ -155,7 +166,7 @@ func (self *WebView) Destroy() {
 
 	C.webkit_web_view_try_close(self.cWebView)
 
-	self.gtkWidget = nil
+	self.window = nil
 	self.cGtkWidget = nil
 	self.cWebView = nil
 }

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -58,7 +59,7 @@ func TestMain(m *testing.M) {
 }
 
 func Test_Browser_Concurrency(t *testing.T) {
-	count := 10
+	count := 100
 
 	var noTitleCount uint64 = 0
 	var noHtmlCount uint64 = 0
@@ -101,6 +102,8 @@ func Test_Browser_Concurrency(t *testing.T) {
 	for {
 		<-c
 
+		runtime.GC() // Make sure GC() does not release unsafe pointers
+
 		finished++
 		if finished == count {
 			break
@@ -112,7 +115,7 @@ func Test_Browser_Concurrency(t *testing.T) {
 }
 
 func Test_Browser_Persistent(t *testing.T) {
-	count := 1000
+	count := 10
 
 	var noTitleCount uint64 = 0
 	var noHtmlCount uint64 = 0
