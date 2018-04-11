@@ -3,7 +3,6 @@ package fetchers
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	neturl "net/url"
 	"strings"
@@ -11,6 +10,10 @@ import (
 
 	"../../common/util"
 )
+
+var httpTransport = &http.Transport{
+	DisableKeepAlives: true,
+}
 
 type HttpFetcher struct {
 	timeout    time.Duration
@@ -64,7 +67,8 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 	}
 
 	client := http.Client{
-		Timeout: self.timeout,
+		Transport: httpTransport,
+		Timeout:   self.timeout,
 	}
 
 	resp, errResp := client.Do(req)
@@ -73,7 +77,7 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 	}
 	defer resp.Body.Close()
 
-	bytes, errRead := ioutil.ReadAll(resp.Body)
+	b, errRead := util.ReadAll(resp.Body)
 	if errRead != nil {
 		return nil, errRead
 	}
@@ -81,7 +85,7 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 	return &Result{
 		Hash:        self.Hash(),
 		Format:      ResultFormat_Bytes,
-		Content:     bytes,
+		Content:     b,
 		ContentType: resp.Header.Get("Content-Type"),
 	}, nil
 }
