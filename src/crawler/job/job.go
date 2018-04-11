@@ -2,6 +2,7 @@ package job
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"time"
@@ -26,9 +27,10 @@ type Job struct {
 
 	rule *rule.Rule
 
-	targetsQueue      *queue.PriorityQueue
-	targetsInCrawling map[uint64]*target.Target
-	targetCrawledChan chan *target.Target
+	targetsQueue           *queue.PriorityQueue      // Targets queue waiting for crawling
+	targetsInCrawling      map[uint64]*target.Target // Targets crawling
+	targetNotifyChan       chan *target.Target       // Notify target's status has changed
+	targetNotifyChanClosed bool
 
 	sinkChan          chan<- *sink.SinkPack
 	sinkChanConnected bool
@@ -55,7 +57,6 @@ func NewJob(title string, ruleContent string) (*Job, error) {
 
 		targetsQueue:      queue.NewPriorityQueue(),
 		targetsInCrawling: map[uint64]*target.Target{},
-		targetCrawledChan: make(chan *target.Target, 100),
 
 		sinkChanConnected: false,
 
@@ -91,10 +92,17 @@ func (self *Job) GetDelay() time.Duration {
 }
 
 func (self *Job) fn() {
-
 	xlog.Outf("Job \"%s\" start to crawl\n", self.title)
 
 	self.runAt = time.Now()
+
+	self.targetNotifyChan = make(chan *target.Target)
+	self.targetNotifyChanClosed = false
+
+	defer func() {
+		self.targetNotifyChanClosed = true
+		close(self.targetNotifyChan)
+	}()
 
 	// Start to crawl targets
 	for _, entry := range self.rule.Entries {
@@ -119,23 +127,60 @@ func (self *Job) fn() {
 		if runningCount < self.concurrency || self.concurrency <= 0 {
 			if waitingCount > 0 {
 				t := self.targetsQueue.Pop().(*target.Target)
-				self.startCrawlTarget(t)
+				self.targetsInCrawling[t.GetId()] = t
+
+				go self.crawl(t)
 			}
 		}
 
 		// Notice: runningCount or waitingCount may changed
 		if len(self.targetsInCrawling) > 0 {
-			t := <-self.targetCrawledChan
+			left := self.runAt.Add(self.timeout).Sub(time.Now())
+			if left > 0 {
+				var t *target.Target
 
-			self.crawledTargetsCount++
-			self.analyze(t)
+				tm := time.NewTimer(left)
+				select {
+				case <-tm.C:
+				case t = <-self.targetNotifyChan:
+					tm.Stop()
+				}
+
+				if t != nil {
+
+					if err := t.GetFetchErr(); err != nil { // fetch error
+						xlog.Errln("Fetch target error:", err)
+
+						if t.CanRetry() {
+							go self.recrawl(t)
+						}
+
+					} else {
+						if t.Analyzed {
+							if t.AnalyzeErr != nil {
+								xlog.Errln("Analyze target error:", t.AnalyzeErr)
+
+							}
+
+							self.crawledTargetsCount++
+							delete(self.targetsInCrawling, t.GetId())
+						} else {
+							go self.analyze(t)
+
+						}
+
+					}
+
+				}
+
+			}
 		}
 
 		elapse := time.Now().Sub(self.runAt)
-		if elapse > self.timeout {
+		if self.timeout > 0 && elapse > self.timeout { // Check timeout
 			xlog.Outf("Job \"%s\" did not finish crawling, timeout\n", self.title)
 			break
-		} else if elapse > self.interval && self.crawledTargetsCount == 0 {
+		} else if elapse > self.interval && self.crawledTargetsCount == 0 { // Check crawled count
 			xlog.Outf("Job \"%s\" did not crawl anything during interval time\n", self.title)
 			break
 		}
@@ -157,64 +202,51 @@ func (self *Job) ConnectSink(sink *sink.Sink) {
 	self.sinkChanConnected = true
 }
 
-func (self *Job) startCrawlTarget(t *target.Target) {
-	if t != nil {
-		self.targetsInCrawling[t.GetId()] = t
+func (self *Job) crawl(t *target.Target) {
+	t.Crawl()
 
-		go func() {
-			t.Crawl()
-			self.targetCrawledChan <- t
-		}()
+	if !self.targetNotifyChanClosed {
+		self.targetNotifyChan <- t
 	}
 }
 
-func (self *Job) retryCrawlTarget(t *target.Target) {
-	if t != nil {
-		go func() {
-			delay := t.RetryWait
-			if delay > 0 {
-				time.Sleep(delay)
-			}
-
-			t.Crawl()
-			self.targetCrawledChan <- t
-		}()
+func (self *Job) recrawl(t *target.Target) {
+	delay := t.RetryWait
+	if delay > 0 {
+		time.Sleep(delay)
 	}
+
+	self.crawl(t)
 }
 
 func (self *Job) analyze(t *target.Target) {
-	var err error = nil // Crawled target maybe have fetch error, parse error, etc.
-
 	defer func() {
-		if err != nil {
-			xlog.Errln("Crawl target error:", err)
+		t.Analyzed = true
 
-			if t.CanRetry() {
-				self.retryCrawlTarget(t)
-			}
+		if !self.targetNotifyChanClosed {
+			self.targetNotifyChan <- t
 		}
 	}()
 
-	err = t.GetErr() // Fetch error
-	if err != nil {
-		return
-	}
-
-	result := t.GetResult()
-	if result == nil {
-		err = errors.New("Got nothing from target")
+	fetchResult := t.GetFetchResult()
+	if fetchResult == nil {
+		t.AnalyzeErr = errors.New(fmt.Sprintf("Got nothing from target %s", t.Url))
 		return
 	}
 
 	var analyzerResult *analyzers.Result
+	var err error
 
 	resultType := strings.ToLower(t.ResultType)
 	if resultType == "html" {
 		htmlAnalyzer := analyzers.NewHtmlAnalyzer(self.rule)
 
-		if result.Format == fetchers.ResultFormat_Bytes {
-			analyzerResult, err = htmlAnalyzer.ParseBytes(result.Content.([]byte), result.ContentType, t)
+		if fetchResult.Format == fetchers.ResultFormat_Bytes {
+			analyzerResult, err = htmlAnalyzer.ParseBytes(
+				fetchResult.Content.([]byte),
+				fetchResult.ContentType, t)
 			if err != nil {
+				t.AnalyzeErr = err
 				return
 			}
 		}
@@ -222,9 +254,10 @@ func (self *Job) analyze(t *target.Target) {
 	} else if resultType == "json" {
 		jsonAnalyzer := analyzers.NewJsonAnalyzer(self.rule)
 
-		if result.Format == fetchers.ResultFormat_Bytes {
-			analyzerResult, err = jsonAnalyzer.ParseBytes(result.Content.([]byte), t)
+		if fetchResult.Format == fetchers.ResultFormat_Bytes {
+			analyzerResult, err = jsonAnalyzer.ParseBytes(fetchResult.Content.([]byte), t)
 			if err != nil {
+				t.AnalyzeErr = err
 				return
 			}
 		}
@@ -232,9 +265,11 @@ func (self *Job) analyze(t *target.Target) {
 	} else if resultType == "xml" {
 		xmlAnalyzer := analyzers.NewXmlAnalyzer(self.rule)
 
-		if result.Format == fetchers.ResultFormat_Bytes {
-			analyzerResult, err = xmlAnalyzer.ParseBytes(result.Content.([]byte), result.ContentType, t)
+		if fetchResult.Format == fetchers.ResultFormat_Bytes {
+			analyzerResult, err = xmlAnalyzer.ParseBytes(fetchResult.Content.([]byte),
+				fetchResult.ContentType, t)
 			if err != nil {
+				t.AnalyzeErr = err
 				return
 			}
 		}
@@ -247,14 +282,19 @@ func (self *Job) analyze(t *target.Target) {
 		resultType == "gif" {
 		binaryAnalyzer := analyzers.NewBinaryAnalyzer(self.rule)
 
-		analyzerResult, err = binaryAnalyzer.Parse(result.Content.([]byte), t)
-		if err != nil {
-			return
+		if fetchResult.Format == fetchers.ResultFormat_Bytes {
+			analyzerResult, err = binaryAnalyzer.ParseBytes(fetchResult.Content.([]byte), t)
+			if err != nil {
+				t.AnalyzeErr = err
+				return
+			}
 		}
 
 	}
 
 	if analyzerResult != nil {
+
+		// Check mtag
 		mtag := analyzerResult.Mtag
 		if len(mtag) > 0 {
 			// Check exists mtag
@@ -263,7 +303,7 @@ func (self *Job) analyze(t *target.Target) {
 			if storedTarget != nil {
 				storedMtag := storedTarget["mtag"].(string)
 				if mtag == storedMtag {
-					goto end
+					return
 				}
 			}
 
@@ -275,7 +315,7 @@ func (self *Job) analyze(t *target.Target) {
 
 		// Crawl deeper target
 		for _, t := range analyzerResult.Targets {
-			self.startCrawlTarget(t)
+			self.targetsQueue.Push(t)
 		}
 
 		// Save crawled data to sink
@@ -286,6 +326,4 @@ func (self *Job) analyze(t *target.Target) {
 		}
 	}
 
-end:
-	delete(self.targetsInCrawling, t.GetId())
 }

@@ -14,5 +14,4 @@ type Result struct {
 
 const (
 	ResultFormat_Bytes = iota
-	ResultFormat_String
 )

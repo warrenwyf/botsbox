@@ -42,8 +42,11 @@ type Target struct {
 	ObjectOutputs []*rule.ObjectOutput
 	ListOutputs   []*rule.ListOutput
 
-	result *fetchers.Result
-	err    error
+	fetchResult *fetchers.Result
+	fetchErr    error
+
+	Analyzed   bool
+	AnalyzeErr error
 }
 
 func NewTargetWithTemplate(template *rule.TargetTemplate) *Target {
@@ -74,6 +77,7 @@ func NewTarget() *Target {
 		level:     0,
 		createdAt: time.Now(),
 
+		Timeout:    120 * time.Second,
 		Method:     "GET",
 		Header:     map[string]string{},
 		Query:      map[string]string{},
@@ -83,7 +87,6 @@ func NewTarget() *Target {
 
 		Age:       24 * time.Hour,
 		Priority:  0,
-		Timeout:   0,
 		Retry:     3,
 		RetryWait: time.Minute,
 
@@ -112,12 +115,12 @@ func (self *Target) GetHash() string {
 	return self.hash
 }
 
-func (self *Target) GetResult() *fetchers.Result {
-	return self.result
+func (self *Target) GetFetchResult() *fetchers.Result {
+	return self.fetchResult
 }
 
-func (self *Target) GetErr() error {
-	return self.err
+func (self *Target) GetFetchErr() error {
+	return self.fetchErr
 }
 
 func (self *Target) CanRetry() bool {
@@ -140,29 +143,25 @@ func (self *Target) Crawl() {
 		client := strings.ToLower(self.Client)
 		if client == "browser" {
 			browserFetcher := fetchers.NewBrowserFetcher()
+			browserFetcher.SetTimeout(self.Timeout)
 			browserFetcher.SetUrl(self.Url)
 			browserFetcher.SetMethod(self.Method)
 			browserFetcher.SetHeader(self.Header)
 			browserFetcher.SetQuery(self.Query)
 			browserFetcher.SetForm(self.Form)
 			browserFetcher.SetResultType(self.ResultType)
-			if self.Timeout > 0 {
-				browserFetcher.SetTimeout(self.Timeout)
-			}
 
 			fetcher = browserFetcher
 
 		} else {
 			httpFetcher := fetchers.NewHttpFetcher()
+			httpFetcher.SetTimeout(self.Timeout)
 			httpFetcher.SetUrl(self.Url)
 			httpFetcher.SetMethod(self.Method)
 			httpFetcher.SetHeader(self.Header)
 			httpFetcher.SetQuery(self.Query)
 			httpFetcher.SetForm(self.Form)
 			httpFetcher.SetResultType(self.ResultType)
-			if self.Timeout > 0 {
-				httpFetcher.SetTimeout(self.Timeout)
-			}
 
 			fetcher = httpFetcher
 
@@ -171,11 +170,11 @@ func (self *Target) Crawl() {
 	}
 
 	if fetcher == nil {
-		self.err = errors.New("No supported fetcher")
+		self.fetchErr = errors.New("No supported fetcher")
 		return
 	}
 
 	self.hash = fetcher.Hash()
 
-	self.result, self.err = fetcher.Fetch()
+	self.fetchResult, self.fetchErr = fetcher.Fetch()
 }

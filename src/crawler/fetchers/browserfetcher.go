@@ -11,6 +11,10 @@ import (
 	"../../common/util"
 )
 
+const (
+	defaultExportMHtmlTimeout = 30 * time.Second
+)
+
 type BrowserFetcher struct {
 	timeout    time.Duration
 	url        string
@@ -23,7 +27,7 @@ type BrowserFetcher struct {
 
 func NewBrowserFetcher() *BrowserFetcher {
 	return &BrowserFetcher{
-		timeout:    5 * time.Minute,
+		timeout:    120 * time.Second,
 		method:     "GET",
 		header:     map[string]string{},
 		query:      map[string]string{},
@@ -45,10 +49,10 @@ func (self *BrowserFetcher) Fetch() (*Result, error) {
 	defer page.Close()
 
 	page.Load(url, self.timeout)
-	html := mhtml.GetHtml(page.ExportMHtml(self.timeout))
+	html := mhtml.GetHtml(page.ExportMHtml(defaultExportMHtmlTimeout))
 
 	if html == nil {
-		return nil, errors.New("Nothing got via browser")
+		return nil, errors.New("Browser loaded nothing")
 	}
 
 	return &Result{

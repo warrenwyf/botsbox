@@ -17,12 +17,12 @@ func NewBinaryAnalyzer(rule *rule.Rule) *BinaryAnalyzer {
 	}
 }
 
-func (self *BinaryAnalyzer) Parse(b []byte, baseTarget *target.Target) (*Result, error) {
+func (self *BinaryAnalyzer) ParseBytes(b []byte, baseTarget *target.Target) (*Result, error) {
 	result := &Result{}
 
 	result.Mtag = util.Md5Bytes(b)
 
-	baseResult := baseTarget.GetResult()
+	baseResult := baseTarget.GetFetchResult()
 
 	// Analyze outputs
 	for _, output := range baseTarget.ObjectOutputs {

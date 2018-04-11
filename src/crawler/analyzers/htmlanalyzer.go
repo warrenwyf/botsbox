@@ -3,6 +3,7 @@ package analyzers
 import (
 	"bytes"
 	"errors"
+	"io"
 	"path"
 	"strings"
 
@@ -17,6 +18,11 @@ import (
 
 type HtmlAnalyzer struct {
 	rule *rule.Rule
+
+	doc        *goquery.Document
+	baseTarget *target.Target
+
+	raw []byte
 }
 
 func NewHtmlAnalyzer(rule *rule.Rule) *HtmlAnalyzer {
@@ -26,21 +32,41 @@ func NewHtmlAnalyzer(rule *rule.Rule) *HtmlAnalyzer {
 }
 
 func (self *HtmlAnalyzer) ParseBytes(b []byte, contentType string, baseTarget *target.Target) (*Result, error) {
+	if b == nil {
+		return nil, errors.New("Can not parse nil")
+	}
+
 	r, errCharset := charset.NewReader(bytes.NewReader(b), contentType) // Determine charset
 	if errCharset != nil {
 		return nil, errCharset
 	}
 
-	doc, err := goquery.NewDocumentFromReader(r)
+	return self.readAndParse(r, contentType, baseTarget)
+}
+
+func (self *HtmlAnalyzer) readAndParse(reader io.Reader, contentType string, baseTarget *target.Target) (*Result, error) {
+	buf := util.BytesBufferPool.Get().(*bytes.Buffer)
+	defer util.BytesBufferPool.Put(buf)
+
+	buf.Reset()
+	io.TeeReader(reader, buf)
+
+	doc, err := goquery.NewDocumentFromReader(reader)
 	if err != nil {
 		return nil, err
 	}
 
-	return self.parseElement(doc.Selection, baseTarget)
+	// After TeeReader read via goquery
+	self.raw = buf.Bytes()
+
+	self.doc = doc
+	self.baseTarget = baseTarget
+
+	return self.parse()
 }
 
-func (self *HtmlAnalyzer) parseElement(element *goquery.Selection, baseTarget *target.Target) (*Result, error) {
-	if element == nil || baseTarget == nil {
+func (self *HtmlAnalyzer) parse() (*Result, error) {
+	if self.doc == nil || self.baseTarget == nil {
 		return nil, errors.New("Can not parse with nil")
 	}
 
@@ -50,49 +76,49 @@ func (self *HtmlAnalyzer) parseElement(element *goquery.Selection, baseTarget *t
 	}
 
 	// Get Mtag value or use md5(raw content)
-	result.Mtag = extractHtmlValue(element, baseTarget.Mtag)
+	result.Mtag = self.extractHtmlValue(self.doc.Selection, self.baseTarget.Mtag)
 	if len(result.Mtag) == 0 {
-		raw := extractHtmlValue(element, "$raw")
+		raw := self.extractHtmlValue(self.doc.Selection, "$raw")
 		result.Mtag = util.Md5Bytes([]byte(raw))
 	}
 
 	// Analyze deeper targets
-	for selector, entry := range baseTarget.Dive {
+	for selector, entry := range self.baseTarget.Dive {
 		targetTemplate, ok := self.rule.TargetTemplates[entry.Name]
 		if !ok {
 			continue
 		}
 
-		element.Find(selector).Each(func(i int, s *goquery.Selection) {
+		self.doc.Find(selector).Each(func(i int, s *goquery.Selection) {
 			t := target.NewTargetWithTemplate(targetTemplate)
 			if t != nil {
-				t.Url = actOnHtmlUrl(entry.Url, s, baseTarget.Url)
+				t.Url = actOnHtmlUrl(entry.Url, s, self.baseTarget.Url)
 				result.Targets = append(result.Targets, t)
 			}
 		})
 	}
 
 	// Analyze object outputs
-	for _, objectOutput := range baseTarget.ObjectOutputs {
+	for _, objectOutput := range self.baseTarget.ObjectOutputs {
 		name := objectOutput.Name
 		if len(name) == 0 {
 			continue
 		}
 
-		targets, pack := self.parseObjectOutput(element, objectOutput, baseTarget)
+		targets, pack := self.parseObjectOutput(objectOutput)
 
 		result.Targets = append(result.Targets, targets...)
 		result.SinkPacks = append(result.SinkPacks, pack)
 	}
 
 	// Analyze list outputs
-	for _, listOutput := range baseTarget.ListOutputs {
+	for _, listOutput := range self.baseTarget.ListOutputs {
 		name := listOutput.Name
 		if len(name) == 0 {
 			continue
 		}
 
-		targets, packs := self.parseListOutput(element, listOutput, baseTarget)
+		targets, packs := self.parseListOutput(listOutput)
 
 		result.Targets = append(result.Targets, targets...)
 		result.SinkPacks = append(result.SinkPacks, packs...)
@@ -101,7 +127,7 @@ func (self *HtmlAnalyzer) parseElement(element *goquery.Selection, baseTarget *t
 	return result, nil
 }
 
-func (self *HtmlAnalyzer) parseObjectOutput(element *goquery.Selection, output *rule.ObjectOutput, baseTarget *target.Target) ([]*target.Target, *sink.SinkPack) {
+func (self *HtmlAnalyzer) parseObjectOutput(output *rule.ObjectOutput) ([]*target.Target, *sink.SinkPack) {
 	name := output.Name
 	dataTpl := output.Data
 
@@ -111,7 +137,7 @@ func (self *HtmlAnalyzer) parseObjectOutput(element *goquery.Selection, output *
 	data := map[string]interface{}{}
 
 	for k, pipeline := range dataTpl {
-		v := extractHtmlValue(element, pipeline)
+		v := self.extractHtmlValue(self.doc.Selection, pipeline)
 		if len(v) == 0 {
 			continue
 		}
@@ -122,7 +148,7 @@ func (self *HtmlAnalyzer) parseObjectOutput(element *goquery.Selection, output *
 			resultType := strings.TrimPrefix(ext, ".")
 
 			// Fetch additional file target
-			url := relUrlToAbs(v, baseTarget.Url)
+			url := relUrlToAbs(v, self.baseTarget.Url)
 			t := newFileTarget(name, url, resultType)
 			targets = append(targets, t)
 
@@ -132,17 +158,17 @@ func (self *HtmlAnalyzer) parseObjectOutput(element *goquery.Selection, output *
 		}
 	}
 
-	value := extractHtmlValue(element, id)
+	value := self.extractHtmlValue(self.doc.Selection, id)
 	if len(value) > 0 {
 		id = value
 	} else {
-		for varName, varValue := range baseTarget.ApplyedVar {
+		for varName, varValue := range self.baseTarget.ApplyedVar {
 			id = rule.ApplyVarToString(id, varName, varValue)
 		}
 	}
 
 	var hash string = ""
-	if baseTargetResult := baseTarget.GetResult(); baseTargetResult != nil {
+	if baseTargetResult := self.baseTarget.GetFetchResult(); baseTargetResult != nil {
 		hash = baseTargetResult.Hash
 	}
 
@@ -157,7 +183,7 @@ func (self *HtmlAnalyzer) parseObjectOutput(element *goquery.Selection, output *
 	return targets, pack
 }
 
-func (self *HtmlAnalyzer) parseListOutput(element *goquery.Selection, output *rule.ListOutput, baseTarget *target.Target) ([]*target.Target, []*sink.SinkPack) {
+func (self *HtmlAnalyzer) parseListOutput(output *rule.ListOutput) ([]*target.Target, []*sink.SinkPack) {
 	name := output.Name
 	selector := output.Selector
 	dataTpl := output.Data
@@ -165,12 +191,12 @@ func (self *HtmlAnalyzer) parseListOutput(element *goquery.Selection, output *ru
 	targets := []*target.Target{}
 	packs := []*sink.SinkPack{}
 
-	element.Find(selector).Each(func(i int, s *goquery.Selection) {
+	self.doc.Find(selector).Each(func(i int, s *goquery.Selection) {
 		id := output.Id
 		data := map[string]interface{}{}
 
 		for k, pipeline := range dataTpl {
-			v := extractHtmlValue(s, pipeline)
+			v := self.extractHtmlValue(s, pipeline)
 			if len(v) == 0 {
 				continue
 			}
@@ -181,7 +207,7 @@ func (self *HtmlAnalyzer) parseListOutput(element *goquery.Selection, output *ru
 				resultType := strings.TrimPrefix(ext, ".")
 
 				// Fetch additional file target
-				url := relUrlToAbs(v, baseTarget.Url)
+				url := relUrlToAbs(v, self.baseTarget.Url)
 				t := newFileTarget(name, url, resultType)
 				targets = append(targets, t)
 
@@ -191,17 +217,17 @@ func (self *HtmlAnalyzer) parseListOutput(element *goquery.Selection, output *ru
 			}
 		}
 
-		value := extractHtmlValue(s, id)
+		value := self.extractHtmlValue(s, id)
 		if len(value) > 0 {
 			id = value
 		} else {
-			for varName, varValue := range baseTarget.ApplyedVar {
+			for varName, varValue := range self.baseTarget.ApplyedVar {
 				id = rule.ApplyVarToString(id, varName, varValue)
 			}
 		}
 
 		var hash string = ""
-		if baseTargetResult := baseTarget.GetResult(); baseTargetResult != nil {
+		if baseTargetResult := self.baseTarget.GetFetchResult(); baseTargetResult != nil {
 			hash = baseTargetResult.Hash
 		}
 
@@ -262,15 +288,19 @@ func actOnHtmlUrl(u string, element *goquery.Selection, parentUrl string) string
  * $[selector].$html
  * $[selector].$attr[href]
  */
-func extractHtmlValue(element *goquery.Selection, pipeline string) string {
+func (self *HtmlAnalyzer) extractHtmlValue(element *goquery.Selection, pipeline string) string {
 	if len(pipeline) == 0 {
 		return ""
 	}
 
 	if pipeline == "$raw" {
-		html, err := element.Html()
-		if err == nil {
-			return html
+		if element == self.doc.Selection && self.raw != nil {
+			return string(self.raw)
+		} else {
+			html, err := element.Html()
+			if err == nil {
+				return html
+			}
 		}
 
 	} else if pipeline == "$title" {

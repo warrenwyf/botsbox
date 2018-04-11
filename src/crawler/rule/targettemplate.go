@@ -9,9 +9,10 @@ import (
 )
 
 type TargetTemplate struct {
+	Timeout time.Duration
+
 	Age       time.Duration
 	Priority  int64
-	Timeout   time.Duration
 	Retry     int64
 	RetryWait time.Duration
 	Mtag      string
@@ -25,9 +26,10 @@ type TargetTemplate struct {
 
 func NewTargetTemplateWithJson(elem *gjson.Result) *TargetTemplate {
 	t := &TargetTemplate{
+		Timeout: 120 * time.Second,
+
 		Age:       24 * time.Hour,
 		Priority:  0,
-		Timeout:   0,
 		Retry:     3,
 		RetryWait: time.Minute,
 
@@ -35,6 +37,14 @@ func NewTargetTemplateWithJson(elem *gjson.Result) *TargetTemplate {
 
 		ObjectOutputs: []*ObjectOutput{},
 		ListOutputs:   []*ListOutput{},
+	}
+
+	timeoutElem := elem.Get("$timeout")
+	if timeoutElem.Exists() {
+		timeout, err := util.ParseDuration(timeoutElem.String())
+		if err == nil {
+			t.Timeout = timeout
+		}
 	}
 
 	ageElem := elem.Get("$age")
@@ -50,14 +60,6 @@ func NewTargetTemplateWithJson(elem *gjson.Result) *TargetTemplate {
 		priority := priorityElem.Int()
 		if priority >= 0 {
 			t.Priority = priority
-		}
-	}
-
-	timeoutElem := elem.Get("$timeout")
-	if timeoutElem.Exists() {
-		timeout, err := util.ParseDuration(timeoutElem.String())
-		if err == nil {
-			t.Timeout = timeout
 		}
 	}
 

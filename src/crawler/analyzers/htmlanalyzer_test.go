@@ -261,6 +261,8 @@ func Test_actOnHtmlUrl(t *testing.T) {
 }
 
 func Test_extractHtmlValue(t *testing.T) {
+	analyzer := NewHtmlAnalyzer(nil)
+
 	r := bytes.NewReader(([]byte)(html))
 
 	doc, err := goquery.NewDocumentFromReader(r)
@@ -268,7 +270,7 @@ func Test_extractHtmlValue(t *testing.T) {
 		t.Fatal("Parse HTML error:", err)
 	}
 
-	est_cn := extractHtmlValue(doc.Selection, "$[#est_cn].$text")
+	est_cn := analyzer.extractHtmlValue(doc.Selection, "$[#est_cn].$text")
 	if strings.TrimSpace(est_cn) != "国内版" {
 		t.Fatal("extractHtmlValue() get wrong result")
 	}

@@ -1,6 +1,7 @@
 package analyzers
 
 import (
+	"errors"
 	"path"
 	"strings"
 
@@ -14,6 +15,9 @@ import (
 
 type JsonAnalyzer struct {
 	rule *rule.Rule
+
+	doc        gjson.Result
+	baseTarget *target.Target
 }
 
 func NewJsonAnalyzer(rule *rule.Rule) *JsonAnalyzer {
@@ -23,26 +27,41 @@ func NewJsonAnalyzer(rule *rule.Rule) *JsonAnalyzer {
 }
 
 func (self *JsonAnalyzer) ParseBytes(json []byte, baseTarget *target.Target) (*Result, error) {
+	if json == nil {
+		return nil, errors.New("Can not parse with nil")
+	}
+
+	self.doc = gjson.ParseBytes(json)
+	self.baseTarget = baseTarget
+
+	return self.parse()
+}
+
+func (self *JsonAnalyzer) parse() (*Result, error) {
+	if !self.doc.Exists() || self.baseTarget == nil {
+		return nil, errors.New("Can not parse with nil")
+	}
+
 	result := &Result{
 		Targets:   []*target.Target{},
 		SinkPacks: []*sink.SinkPack{},
 	}
 
 	// Get Mtag value or use md5(raw content)
-	result.Mtag = extractJsonValue(json, baseTarget.Mtag)
+	result.Mtag = self.extractJsonValue(self.baseTarget.Mtag)
 	if len(result.Mtag) == 0 {
-		raw := extractJsonValue(json, "$raw")
+		raw := self.extractJsonValue("$raw")
 		result.Mtag = util.Md5Bytes([]byte(raw))
 	}
 
 	// Analyze deeper targets
-	for selector, entry := range baseTarget.Dive {
+	for selector, entry := range self.baseTarget.Dive {
 		targetTemplate, ok := self.rule.TargetTemplates[entry.Name]
 		if !ok {
 			continue
 		}
 
-		gjson.GetBytes(json, selector).ForEach(func(k, v gjson.Result) bool {
+		self.doc.Get(selector).ForEach(func(k, v gjson.Result) bool {
 			t := target.NewTargetWithTemplate(targetTemplate)
 			if t != nil {
 				t.Url = v.String()
@@ -54,26 +73,26 @@ func (self *JsonAnalyzer) ParseBytes(json []byte, baseTarget *target.Target) (*R
 	}
 
 	// Analyze object outputs
-	for _, objectOutput := range baseTarget.ObjectOutputs {
+	for _, objectOutput := range self.baseTarget.ObjectOutputs {
 		name := objectOutput.Name
 		if len(name) == 0 {
 			continue
 		}
 
-		targets, pack := self.parseObjectOutput(json, objectOutput, baseTarget)
+		targets, pack := self.parseObjectOutput(objectOutput)
 
 		result.Targets = append(result.Targets, targets...)
 		result.SinkPacks = append(result.SinkPacks, pack)
 	}
 
 	// Analyze list outputs
-	for _, listOutput := range baseTarget.ListOutputs {
+	for _, listOutput := range self.baseTarget.ListOutputs {
 		name := listOutput.Name
 		if len(name) == 0 {
 			continue
 		}
 
-		targets, packs := self.parseListOutput(json, listOutput, baseTarget)
+		targets, packs := self.parseListOutput(listOutput)
 
 		result.Targets = append(result.Targets, targets...)
 		result.SinkPacks = append(result.SinkPacks, packs...)
@@ -82,7 +101,7 @@ func (self *JsonAnalyzer) ParseBytes(json []byte, baseTarget *target.Target) (*R
 	return result, nil
 }
 
-func (self *JsonAnalyzer) parseObjectOutput(json []byte, output *rule.ObjectOutput, baseTarget *target.Target) ([]*target.Target, *sink.SinkPack) {
+func (self *JsonAnalyzer) parseObjectOutput(output *rule.ObjectOutput) ([]*target.Target, *sink.SinkPack) {
 	name := output.Name
 	id := output.Id
 	dataTpl := output.Data
@@ -91,7 +110,7 @@ func (self *JsonAnalyzer) parseObjectOutput(json []byte, output *rule.ObjectOutp
 	data := map[string]interface{}{}
 
 	for k, pipeline := range dataTpl {
-		v := extractJsonValue(json, pipeline)
+		v := self.extractJsonValue(pipeline)
 		if len(v) == 0 {
 			continue
 		}
@@ -102,7 +121,7 @@ func (self *JsonAnalyzer) parseObjectOutput(json []byte, output *rule.ObjectOutp
 			resultType := strings.TrimPrefix(ext, ".")
 
 			// Fetch additional file target
-			url := relUrlToAbs(v, baseTarget.Url)
+			url := relUrlToAbs(v, self.baseTarget.Url)
 			t := newFileTarget(name, url, resultType)
 			targets = append(targets, t)
 
@@ -112,27 +131,32 @@ func (self *JsonAnalyzer) parseObjectOutput(json []byte, output *rule.ObjectOutp
 		}
 	}
 
-	value := extractJsonValue(json, id)
+	value := self.extractJsonValue(id)
 	if len(value) > 0 {
 		id = value
 	} else {
-		for varName, varValue := range baseTarget.ApplyedVar {
+		for varName, varValue := range self.baseTarget.ApplyedVar {
 			id = rule.ApplyVarToString(id, varName, varValue)
 		}
+	}
+
+	var hash string = ""
+	if baseTargetResult := self.baseTarget.GetFetchResult(); baseTargetResult != nil {
+		hash = baseTargetResult.Hash
 	}
 
 	pack := &sink.SinkPack{
 		Name: name,
 
 		Id:   id,
-		Hash: baseTarget.GetResult().Hash,
+		Hash: hash,
 		Data: data,
 	}
 
 	return targets, pack
 }
 
-func (self *JsonAnalyzer) parseListOutput(json []byte, output *rule.ListOutput, baseTarget *target.Target) ([]*target.Target, []*sink.SinkPack) {
+func (self *JsonAnalyzer) parseListOutput(output *rule.ListOutput) ([]*target.Target, []*sink.SinkPack) {
 	name := output.Name
 	selector := output.Selector
 	id := output.Id
@@ -141,11 +165,11 @@ func (self *JsonAnalyzer) parseListOutput(json []byte, output *rule.ListOutput, 
 	targets := []*target.Target{}
 	packs := []*sink.SinkPack{}
 
-	gjson.GetBytes(json, selector).ForEach(func(k, v gjson.Result) bool {
+	self.doc.Get(selector).ForEach(func(k, v gjson.Result) bool {
 		data := map[string]interface{}{}
 
 		for k, pipeline := range dataTpl {
-			v := extractJsonValue(json, pipeline)
+			v := self.extractJsonValue(pipeline)
 			if len(v) == 0 {
 				continue
 			}
@@ -156,7 +180,7 @@ func (self *JsonAnalyzer) parseListOutput(json []byte, output *rule.ListOutput, 
 				resultType := strings.TrimPrefix(ext, ".")
 
 				// Fetch additional file target
-				url := relUrlToAbs(v, baseTarget.Url)
+				url := relUrlToAbs(v, self.baseTarget.Url)
 				t := newFileTarget(name, url, resultType)
 				targets = append(targets, t)
 
@@ -166,20 +190,25 @@ func (self *JsonAnalyzer) parseListOutput(json []byte, output *rule.ListOutput, 
 			}
 		}
 
-		value := extractJsonValue(json, id)
+		value := self.extractJsonValue(id)
 		if len(value) > 0 {
 			id = value
 		} else {
-			for varName, varValue := range baseTarget.ApplyedVar {
+			for varName, varValue := range self.baseTarget.ApplyedVar {
 				id = rule.ApplyVarToString(id, varName, varValue)
 			}
+		}
+
+		var hash string = ""
+		if baseTargetResult := self.baseTarget.GetFetchResult(); baseTargetResult != nil {
+			hash = baseTargetResult.Hash
 		}
 
 		pack := &sink.SinkPack{
 			Name: name,
 
 			Id:   id,
-			Hash: baseTarget.GetResult().Hash,
+			Hash: hash,
 			Data: data,
 		}
 
@@ -195,13 +224,13 @@ func (self *JsonAnalyzer) parseListOutput(json []byte, output *rule.ListOutput, 
  * $raw
  * $[selector]
  */
-func extractJsonValue(json []byte, pipeline string) string {
+func (self *JsonAnalyzer) extractJsonValue(pipeline string) string {
 	if len(pipeline) == 0 {
 		return ""
 	}
 
 	if pipeline == "$raw" {
-		return string(json)
+		return self.doc.Raw
 
 	} else {
 		selectorStr := regAction.FindString(pipeline)
@@ -210,8 +239,7 @@ func extractJsonValue(json []byte, pipeline string) string {
 			return ""
 		}
 
-		return gjson.GetBytes(json, selector).String()
-
+		return self.doc.Get(selector).String()
 	}
 
 	return ""
