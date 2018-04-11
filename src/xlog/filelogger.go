@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -163,13 +162,11 @@ func (self *FileLogger) writeBuffer(str string) error {
 }
 
 func (self *FileLogger) writeFile() error {
-	b, errRead := ioutil.ReadAll(self.buf)
-	if errRead != nil {
-		return errRead
-	}
-
+	b := self.buf.Bytes()
 	if len(b) == 0 {
 		return nil
+	} else {
+		self.buf.Reset()
 	}
 
 	_, errWrite := self.file.Write(b)

@@ -3,10 +3,11 @@ package mhtml
 import (
 	"bufio"
 	"bytes"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/textproto"
+
+	"../util"
 )
 
 func GetHtml(mhtml []byte) []byte {
@@ -50,7 +51,7 @@ func GetHtml(mhtml []byte) []byte {
 			continue
 		}
 
-		b, err := ioutil.ReadAll(part)
+		b, err := util.ReadAll(part)
 		if err != nil {
 			return nil
 		}

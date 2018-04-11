@@ -1,11 +1,12 @@
 package fetchers
 
 import (
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"../../common/util"
 )
 
 var (
@@ -20,7 +21,7 @@ func Test_SetupServer(t *testing.T) {
 		if strings.ToUpper(req.Method) == "GET" {
 			res.Write([]byte("get ok"))
 		} else if strings.ToUpper(req.Method) == "POST" {
-			b, _ := ioutil.ReadAll(req.Body)
+			b, _ := util.ReadAll(req.Body)
 			res.Write(b)
 		}
 	})
