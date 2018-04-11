@@ -9,6 +9,7 @@ echo "go get packages ..."
 go get github.com/petar/GoLLRB/llrb
 go get github.com/tidwall/gjson
 go get github.com/PuerkitoBio/goquery
+go get github.com/beevik/etree
 go get github.com/gotk3/gotk3/gtk
 go get github.com/mattn/go-sqlite3
 go get gopkg.in/mgo.v2
