@@ -16,4 +16,10 @@ func UseRootRouter(e *echo.Echo) {
 		})
 	})
 
+	e.GET("/create-job", func(c echo.Context) error {
+		return c.Render(http.StatusOK, "create-job.html", map[string]interface{}{
+			"version": runtime.GetVersion(),
+		})
+	})
+
 }

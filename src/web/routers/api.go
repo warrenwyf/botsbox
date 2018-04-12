@@ -70,6 +70,26 @@ func UseApiRouter(e *echo.Echo) {
 		return writeJsonResponse(c.Response(), result)
 	})
 
+	e.POST(joinPath(ApiPrefix, "/createJob"), func(c echo.Context) error {
+		title := c.Request().PostFormValue("title")
+		rule := c.Request().PostFormValue("rule")
+
+		_, err := store.GetStore().InsertObject(store.JobDataset,
+			[]string{"title", "rule", "status"},
+			[]interface{}{title, rule, "deactive"})
+
+		code := 0
+		if err != nil {
+			code = 5001
+		}
+
+		result := map[string]interface{}{
+			"code": code,
+		}
+
+		return writeJsonResponse(c.Response(), result)
+	})
+
 	e.POST(joinPath(ApiPrefix, "/job/:id/active"), func(c echo.Context) error {
 		id := c.Param("id")
 

@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="x-ua-compatible" content="ie=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+
+	<title>botsbox</title>
+	<link rel="icon" href="/static/img/favicon.ico">
+
+	<link rel="stylesheet" href="/static/css/uikit.min.css">
+	<link rel="stylesheet" href="/static/css/uikit-components/notify.min.css">
+	<link rel="stylesheet" href="/static/css/codemirror.css">
+	<link rel="stylesheet" href="/static/css/codemirror-monokai.css">
+
+	<style type="text/css">
+	.CodeMirror-scroll {
+		height: 100%;
+	}
+	</style>
+</head>
+
+<body>
+
+	<div id="body-container" class="uk-height-viewport uk-clearfix">
+
+		<div id="header">
+			<div class="uk-margin-top uk-clearfix">
+				<div class="uk-float-left uk-flex uk-flex-bottom">
+					<img class="uk-margin-small-left" src="/static/img/favicon.ico" style="width: 24px">
+					<span class="uk-margin-small-left">botsbox<small class="uk-text-muted uk-margin-small-left">{{ .version }}</small></span>
+				</div>
+
+				<div class="uk-float-right uk-margin-right">
+					<a href="javascript:history.back();" class="uk-icon-button uk-icon-arrow-left"></a>
+					<a href="javascript:;" class="uk-icon-button uk-icon-check" @click="save()"></a>
+				</div>
+			</div>
+
+			<hr style="margin-bottom: 0">
+		</div>
+
+		<div id="rule-container" class="uk-grid uk-grid-collapse">
+
+			<div id="rule-viz" class="uk-width-1-2"></div>
+
+			<div id="rule-editor" class="uk-width-1-2"></div>
+
+		</div>
+
+	</div>
+
+	<script src="/static/js/jquery.min.js"></script>
+	<script src="/static/js/vue.min.js"></script>
+	<script src="/static/js/uikit.min.js"></script>
+	<script src="/static/js/uikit-components/notify.min.js"></script>
+	<script src="/static/js/codemirror.js"></script>
+	<script src="/static/js/codemirror-javascript.js"></script>
+
+	<script type="text/javascript">
+	var h = $('#body-container').height() - $('#header').height() - $('#header').offset().top;
+
+	var vm = new Vue({
+
+		el: '#body-container',
+
+		data: {
+			ruleEditor: null,
+
+			saving: false,
+		},
+
+		mounted: function() {
+			var vm = this;
+
+			var rulePlaceholder = `{
+	"$every": "5m",
+	"$entries": [
+		{
+			"$name": "index_page",
+			"$url": "https://news.baidu.com"
+		}
+	],
+	"index_page": {
+		"$outputs": [
+			{
+				"$name": "baidu_hotnews",
+				"$id": "$title",
+				"$data": {
+					"title": "$title",
+					"page": "$raw"
+				}
+			}
+		]
+	}
+}`;
+
+			vm.ruleEditor = CodeMirror(document.getElementById("rule-editor"), {
+				value: rulePlaceholder,
+				mode: {
+					name: "javascript",
+					json: true,
+				},
+				theme: 'monokai',
+				lineNumbers: true,
+			});
+
+			vm.ruleEditor.setSize('100%', h);
+		},
+
+		methods: {
+
+			save: function() {
+				var vm = this;
+
+				var rule = vm.ruleEditor.getValue();
+
+
+				if (vm.saving) {
+					return;
+				}
+
+
+				UIkit.modal.prompt("Give a name:", "", function(title) {
+					if (!title) {
+						UIkit.notify('Name is required', { timeout: 2000, status: 'danger' });
+						return;
+					}
+
+					vm.saving = true;
+					$.post("/api/createJob", {
+						title: title,
+						rule: rule,
+					}, function(data) {
+						code = data['code'];
+						if (!code) {
+							location.href = '/';
+						} else {
+							UIkit.notify('Save failed, please try later', { timeout: 2000, status: 'warning' });
+						}
+					}, "json").always(function() {
+						vm.saving = false;
+					});
+				});
+			},
+
+		},
+
+	});
+	</script>
+</body>
+
+</html>
