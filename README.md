@@ -1,8 +1,12 @@
-# botsbox
+<p align="center"><img width="64" src="icon.png" alt="Logo"></p>
+<h2 align="center">botsbox</h2>
 
 
-Requirements
-===
+Web crawler written in Go
+
+
+
+### Dev Requirements
 
 macOS:
 
@@ -12,8 +16,7 @@ $ sudo port install webkit2-gtk
 ```
 
 
-Build
-===
+### Build
 
 Make sure "golang.org/x/net" package has installed (Because of GFW, you need install manually in China)
 
@@ -21,8 +24,7 @@ Make sure "golang.org/x/net" package has installed (Because of GFW, you need ins
 $ ./build.sh
 ```
 
-Run tests
-===
+### Run tests
 
 ```bash
 $ go test -v ./...

@@ -63,11 +63,11 @@ func (h *Hub) LoadJobs() {
 
 	jobsCount := 0
 	for _, jobObj := range jobObjs {
-		if jobObj["status"].(string) != "alive" {
+		if jobObj["status"].(string) != "active" {
 			continue
 		}
 
-		job, err := job.NewJob(jobObj["title"].(string), jobObj["rule"].(string))
+		job, err := job.NewJob(jobObj["_id"].(string), jobObj["title"].(string), jobObj["rule"].(string))
 		if err != nil {
 			xlog.Errln("Load job failed:", jobObj, err)
 			continue
@@ -82,4 +82,52 @@ func (h *Hub) LoadJobs() {
 	}
 
 	xlog.Outln("Loaded", jobsCount, "jobs")
+}
+
+func (h *Hub) ActiveJob(id string) bool {
+	jobObj, err := store.GetStore().GetJob(id)
+	if err != nil {
+		xlog.Errln("Get job failed:", err)
+		return false
+	}
+
+	ok := false
+
+	if jobObj != nil {
+		job, err := job.NewJob(jobObj["_id"].(string), jobObj["title"].(string), jobObj["rule"].(string))
+		if err != nil {
+			xlog.Errln("Load job failed:", jobObj, err)
+			return false
+		}
+
+		job.ConnectSink(h.sink)
+
+		taskId := h.jobSchedule.CreateTask(job)
+		if taskId > 0 {
+			xlog.Outln("Job", id, "actived")
+			ok = true
+		}
+
+		// Sync store
+		store.GetStore().UpdateObject(store.JobDataset, id, []string{"status"}, []interface{}{"active"})
+	}
+
+	return ok
+}
+
+func (h *Hub) DeactiveJob(id string) bool {
+	ok := false
+
+	job := h.jobSchedule.GetTaskByRunnableId(id)
+	if job != nil {
+		ok = h.jobSchedule.DeleteTask(job.GetId())
+		if ok {
+			xlog.Outln("Job", id, "deactived")
+		}
+
+		// Sync store
+		store.GetStore().UpdateObject(store.JobDataset, id, []string{"status"}, []interface{}{"deactive"})
+	}
+
+	return ok
 }

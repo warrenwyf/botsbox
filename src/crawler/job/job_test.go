@@ -43,7 +43,7 @@ func Test_NewJob(t *testing.T) {
 	}
 	`
 
-	j, err := NewJob("unittest", rule)
+	j, err := NewJob("id", "unittest", rule)
 	if err != nil {
 		t.Fatalf("NewJob error: %v", err)
 	}

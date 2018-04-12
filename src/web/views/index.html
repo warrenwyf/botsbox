@@ -1,0 +1,234 @@
+<!doctype html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="x-ua-compatible" content="ie=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+
+	<title>botsbox</title>
+	<link rel="icon" href="/static/img/favicon.ico">
+
+	<link rel="stylesheet" href="/static/css/uikit.min.css">
+	<link rel="stylesheet" href="/static/css/uikit-components/notify.min.css">
+</head>
+
+<body>
+
+	<div id="body-container">
+
+		<div class="uk-margin-top uk-flex uk-flex-bottom">
+			<img class="uk-margin-small-left" src="/static/img/favicon.ico" style="width: 24px">
+			<span class="uk-margin-small-left">botsbox<small class="uk-text-muted uk-margin-small-left">{{ .version }}</small></span>
+		</div>
+
+		<hr>
+
+		<div id="jobs-container" class="uk-margin-large-top uk-container-center uk-width-1-1 uk-width-xlarge-3-5 uk-width-xxlarge-1-2">
+
+			<div class="uk-margin-left uk-margin-large-bottom uk-text-large">
+				<a href="javascript:;" class="uk-icon-hover uk-icon-plus-square-o"></a>
+			</div>
+
+			<ul id="ul-jobs" class="uk-list">
+
+				<li v-for="(job, jobId) in jobs" class="uk-grid" data-uk-grid-match>
+					<div class="uk-width-1-4">
+						<div v-if="activeJobs[jobId]" class="uk-margin-left">
+							<div v-if="activeJobs[jobId].running">
+								<i class="uk-icon-justify uk-icon-sun-o uk-icon-spin uk-text-warning"></i>
+							</div>
+							<div v-else>
+								<i class="uk-icon-justify uk-icon-clock-o uk-text-success"></i>
+								<span class="uk-text-small" v-text="formatTimeInSecs(activeJobs[jobId].next)"></span>
+							</div>
+						</div>
+						<div v-else class="uk-margin-left">
+							<i class="uk-icon-justify uk-icon-ban uk-text-muted"></i>
+						</div>
+					</div>
+					<div class="uk-width-1-2 uk-text-break" v-html="job['title']" style="border-left: 1px solid #ddd"></div>
+					<div class="uk-width-1-10">
+						<div v-if="activeJobs[jobId]" class="uk-text-muted" v-text="activeJobs[jobId].crawled"></div>
+					</div>
+					<div class="uk-width-1-10">
+						<div v-if="job['status']=='active'">
+							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-pause" @click="deactiveJob(jobId)"></a>
+						</div>
+						<div v-else>
+							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-play" @click="activeJob(jobId)"></a>
+						</div>
+					</div>
+				</li>
+
+			</ul>
+
+		</div>
+
+	</div>
+
+	<script src="/static/js/jquery.min.js"></script>
+	<script src="/static/js/vue.min.js"></script>
+	<script src="/static/js/uikit.min.js"></script>
+	<script src="/static/js/uikit-components/notify.min.js"></script>
+	<script src="/static/js/moment-with-locales.min.js"></script>
+
+	<script type="text/javascript">
+	moment.locale(navigator.language);
+
+	var vm = new Vue({
+
+		el: '#body-container',
+
+		data: {
+			jobs: {},
+			activeJobs: {},
+
+			fetchingJobs: false,
+			fetchingActiveJobs: false,
+
+			doingActiveJobs: {},
+			doingDeactiveJobs: {},
+
+			loopTimeoutId: null,
+		},
+
+		mounted: function() {
+			var vm = this;
+
+			vm.fetchJobs();
+			vm.fetchActiveJobsAndLoop();
+		},
+
+		methods: {
+
+			formatTimeInSecs: function(secs) {
+				var today = moment().startOf('day');
+				var time = moment(secs * 1000);
+
+				str = '';
+
+				if (today.year() != time.year()) {
+					str += time.format('YYYY-');
+				}
+
+				if (today.month() != time.month()) {
+					str += time.format('MM-');
+				}
+
+				if (today.date() != time.date()) {
+					str += time.format('DD');
+				}
+
+				str = str || ' '
+
+				if (today.hour() != time.hour()) {
+					str += time.format('HH:');
+				}
+
+				if (today.minute() != time.minute()) {
+					str += time.format('mm:');
+				}
+
+				str += time.format('ss')
+
+				return str
+			},
+
+			fetchJobs: function() {
+				var vm = this;
+
+				vm.fetchingJobs = true;
+				$.get("/api/jobs", function(data) {
+					var jobs = {};
+					$.each(data['jobs'], function(i, job) {
+						jobs[job.id] = job;
+					});
+
+					vm.jobs = jobs;
+				}, "json").always(function() {
+					vm.fetchingJobs = false;
+				});
+			},
+
+			fetchActiveJobs: function() {
+				var vm = this;
+
+				vm.fetchingActiveJobs = true;
+				$.get("/api/activeJobs", function(data) {
+					var activeJobs = {};
+					$.each(data['jobs'], function(i, job) {
+						activeJobs[job.id] = job;
+					});
+
+					vm.activeJobs = activeJobs;
+				}, "json").always(function() {
+					vm.fetchingActiveJobs = false;
+				});
+			},
+
+			fetchActiveJobsAndLoop: function() {
+				var vm = this;
+
+				clearTimeout(vm.loopTimeoutId);
+
+				vm.fetchActiveJobs();
+				vm.loopTimeoutId = setTimeout(vm.fetchActiveJobsAndLoop, 5000);
+			},
+
+			activeJob: function(id) {
+				var vm = this;
+
+				if (vm.doingActiveJobs[id]) {
+					return;
+				}
+
+				vm.$set(vm.doingActiveJobs, id, true);
+				$.post("/api/job/" + id + "/active", {}, function(data) {
+					code = data['code'];
+					if (!code) {
+						var job = vm.jobs[id];
+						job['status'] = 'active';
+						vm.$set(vm.jobs, id, job);
+					} else {
+						UIkit.notify('Active failed, please try later', { timeout: 2000, status: 'warning' });
+					}
+				}, "json").always(function() {
+					vm.$delete(vm.doingActiveJobs, id);
+
+					vm.fetchActiveJobsAndLoop();
+				});
+			},
+
+			deactiveJob: function(id) {
+				var vm = this;
+
+				if (vm.doingDeactiveJobs[id]) {
+					return;
+				}
+
+				vm.$set(vm.doingDeactiveJobs, id, true);
+				$.post("/api/job/" + id + "/deactive", {}, function(data) {
+					code = data['code'];
+					if (!code) {
+						var job = vm.jobs[id];
+						job['status'] = 'deactive';
+						vm.$set(vm.jobs, id, job);
+						vm.$delete(vm.activeJobs, id);
+					} else {
+						UIkit.notify('Deactive failed, please try later', { timeout: 2000, status: 'warning' });
+					}
+				}, "json").always(function() {
+					vm.$delete(vm.doingDeactiveJobs, id);
+
+					vm.fetchActiveJobsAndLoop();
+				});
+			},
+
+		},
+
+	});
+	</script>
+</body>
+
+</html>

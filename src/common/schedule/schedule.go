@@ -13,12 +13,14 @@ type Schedule struct {
 
 	tick time.Duration
 
-	taskIdSeq       uint64
-	taskMap         map[uint64]*Task
-	taskMapMutex    sync.Mutex
-	taskTree        *llrb.LLRB
-	taskTreeMutex   sync.Mutex
-	taskUpdatedChan chan *Task
+	taskIdSeq            uint64
+	taskMap              map[uint64]*Task
+	taskMapMutex         sync.Mutex
+	taskTree             *llrb.LLRB
+	taskTreeMutex        sync.Mutex
+	taskUpdatedChan      chan *Task
+	taskRunnableMap      map[string]uint64
+	taskRunnableMapMutex sync.Mutex
 
 	paused     bool
 	pauseChan  chan struct{}
@@ -36,6 +38,7 @@ func NewSchedule() *Schedule {
 		taskMap:         map[uint64]*Task{},
 		taskTree:        llrb.New(),
 		taskUpdatedChan: make(chan *Task, 1000),
+		taskRunnableMap: map[string]uint64{},
 
 		pauseChan:  make(chan struct{}),
 		resumeChan: make(chan struct{}),
@@ -67,6 +70,10 @@ func (self *Schedule) CreateTask(runnable Runnable) uint64 {
 		self.taskMap[task.id] = task
 		self.taskMapMutex.Unlock()
 
+		self.taskRunnableMapMutex.Lock()
+		self.taskRunnableMap[task.GetRunnable().GetId()] = task.id
+		self.taskRunnableMapMutex.Unlock()
+
 		return task.id
 	}
 
@@ -85,6 +92,10 @@ func (self *Schedule) DeleteTask(id uint64) bool {
 			delete(self.taskMap, id)
 			self.taskMapMutex.Unlock()
 
+			self.taskRunnableMapMutex.Lock()
+			delete(self.taskRunnableMap, task.GetRunnable().GetId())
+			self.taskRunnableMapMutex.Unlock()
+
 			return true
 		} else {
 			return false
@@ -102,10 +113,24 @@ func (self *Schedule) Clear() {
 	self.taskTreeMutex.Lock()
 	self.taskTree = llrb.New()
 	self.taskTreeMutex.Unlock()
+
+	self.taskRunnableMapMutex.Lock()
+	self.taskRunnableMap = map[string]uint64{}
+	self.taskRunnableMapMutex.Unlock()
 }
 
 func (self *Schedule) AllTasks() map[uint64]*Task {
 	return self.taskMap
+}
+
+func (self *Schedule) GetTaskByRunnableId(id string) *Task {
+	taskId, ok := self.taskRunnableMap[id]
+	if ok {
+		task, _ := self.taskMap[taskId]
+		return task
+	}
+
+	return nil
 }
 
 func (self *Schedule) Start() {

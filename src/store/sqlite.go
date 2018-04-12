@@ -32,8 +32,9 @@ func (self *SqliteStore) Init() error {
 	self.db = db
 
 	self.CreateDataset(JobDataset,
-		[]string{"_id", "title", "rule"},
-		[]string{"integer not null primary key", "text not null", "text not null"})
+		[]string{"_id", "title", "rule", "createdAt"},
+		[]string{"integer not null primary key", "text not null", "text not null", "timestamp DEFAULT CURRENT_TIMESTAMP"})
+	self.createIndex(JobDataset, "createdAt")
 
 	self.CreateDataset(TargetDataset,
 		[]string{"_id", "hash", "mtag", "createdAt"},
@@ -137,8 +138,33 @@ func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int
 	return result.RowsAffected()
 }
 
+func (self *SqliteStore) UpdateObject(dataset string, oid string, fields []string, values []interface{}) (count int64, err error) {
+	fieldCount := util.IntMin(len(fields), len(values))
+	if fieldCount <= 0 {
+		return 0, errors.New("No object will be updated")
+	}
+
+	fvs := make([]string, fieldCount)
+	for i := 0; i < fieldCount; i++ {
+		fvs[i] = fmt.Sprintf("%s=?", fields[i])
+	}
+	fvString := strings.Join(fvs, ",")
+
+	params := make([]interface{}, fieldCount+1)
+	copy(params, values)
+	params[fieldCount] = oid
+
+	sql := fmt.Sprintf(`UPDATE "%s" SET %s WHERE _id=?`, dataset, fvString)
+	result, errSql := self.db.Exec(sql, params...)
+	if errSql != nil {
+		return -1, errSql
+	}
+
+	return result.RowsAffected()
+}
+
 func (self *SqliteStore) QueryAllJobs() (jobs []map[string]interface{}, err error) {
-	sql := fmt.Sprintf(`SELECT "_id","title","rule","status" FROM "%s"`, JobDataset)
+	sql := fmt.Sprintf(`SELECT "_id","title","rule","status" FROM "%s" ORDER BY createdAt DESC`, JobDataset)
 
 	rows, errSql := self.db.Query(sql)
 	if errSql != nil {
@@ -149,7 +175,7 @@ func (self *SqliteStore) QueryAllJobs() (jobs []map[string]interface{}, err erro
 	objects := []map[string]interface{}{}
 	for rows.Next() {
 		var (
-			_id    int
+			_id    int64
 			title  string
 			rule   string
 			status string
@@ -161,7 +187,7 @@ func (self *SqliteStore) QueryAllJobs() (jobs []map[string]interface{}, err erro
 		}
 
 		objects = append(objects, map[string]interface{}{
-			"_id":    _id,
+			"_id":    strconv.FormatInt(_id, 10),
 			"title":  title,
 			"rule":   rule,
 			"status": status,
@@ -176,6 +202,50 @@ func (self *SqliteStore) QueryAllJobs() (jobs []map[string]interface{}, err erro
 	return objects, nil
 }
 
+func (self *SqliteStore) GetJob(id string) (job map[string]interface{}, err error) {
+	sql := fmt.Sprintf(`SELECT "_id","title","rule","status" FROM "%s" WHERE _id=? LIMIT 1`, JobDataset)
+
+	idInt, errId := strconv.Atoi(id)
+	if errId != nil {
+		return nil, errId
+	}
+
+	rows, errSql := self.db.Query(sql, idInt)
+	if errSql != nil {
+		return nil, errSql
+	}
+	defer rows.Close()
+
+	var object map[string]interface{} = nil
+	if rows.Next() {
+		var (
+			_id    int64
+			title  string
+			rule   string
+			status string
+		)
+
+		errSql = rows.Scan(&_id, &title, &rule, &status)
+		if errSql != nil {
+			return nil, errSql
+		}
+
+		object = map[string]interface{}{
+			"_id":    strconv.FormatInt(_id, 10),
+			"title":  title,
+			"rule":   rule,
+			"status": status,
+		}
+	}
+
+	errSql = rows.Err()
+	if errSql != nil {
+		return nil, errSql
+	}
+
+	return object, nil
+}
+
 func (self *SqliteStore) GetLatestTarget(hash string) (target map[string]interface{}, err error) {
 	sql := fmt.Sprintf(`SELECT "_id","hash","mtag","createdAt" FROM "%s" WHERE hash=? ORDER BY createdAt DESC LIMIT 1`, TargetDataset)
 
@@ -188,7 +258,7 @@ func (self *SqliteStore) GetLatestTarget(hash string) (target map[string]interfa
 	var object map[string]interface{} = nil
 	if rows.Next() {
 		var (
-			_id       int
+			_id       int64
 			hash      string
 			mtag      string
 			createdAt time.Time
@@ -200,7 +270,7 @@ func (self *SqliteStore) GetLatestTarget(hash string) (target map[string]interfa
 		}
 
 		object = map[string]interface{}{
-			"_id":       _id,
+			"_id":       strconv.FormatInt(_id, 10),
 			"hash":      hash,
 			"mtag":      mtag,
 			"createdAt": createdAt,

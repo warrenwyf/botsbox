@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	version := fmt.Sprintf("%d.%d.%d", runtime.VersionMajor, runtime.VersionMinor, runtime.VersionPatch)
+	version := runtime.GetVersion()
 	if len(os.Args) > 1 {
 		if os.Args[1] == "-v" || os.Args[1] == "--version" {
 			fmt.Println("botsbox version:", version)

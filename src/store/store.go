@@ -27,8 +27,10 @@ type Store interface {
 
 	InsertObject(dataset string, fields []string, values []interface{}) (oid string, err error)
 	DeleteObjects(dataset string, oids []string) (count int64, err error)
+	UpdateObject(dataset string, oid string, fields []string, values []interface{}) (count int64, err error)
 
 	QueryAllJobs() (jobs []map[string]interface{}, err error)
+	GetJob(id string) (job map[string]interface{}, err error)
 	GetLatestTarget(hash string) (target map[string]interface{}, err error)
 
 	Destroy() error

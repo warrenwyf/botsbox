@@ -18,6 +18,7 @@ import (
 )
 
 type Job struct {
+	id       string
 	title    string
 	interval time.Duration
 	delay    time.Duration
@@ -39,13 +40,14 @@ type Job struct {
 	crawledTargetsCount uint64
 }
 
-func NewJob(title string, ruleContent string) (*Job, error) {
+func NewJob(id string, title string, ruleContent string) (*Job, error) {
 	rule, err := rule.NewRuleWithContent(ruleContent)
 	if err != nil {
 		return nil, err
 	}
 
 	job := &Job{
+		id:       id,
 		title:    title,
 		interval: rule.Interval,
 		delay:    rule.Delay,
@@ -66,13 +68,17 @@ func NewJob(title string, ruleContent string) (*Job, error) {
 	return job, nil
 }
 
-func NewJobWithFile(title string, rulePath string) (*Job, error) {
+func NewJobWithFile(id string, title string, rulePath string) (*Job, error) {
 	b, err := ioutil.ReadFile(rulePath)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewJob(title, string(b))
+	return NewJob(id, title, string(b))
+}
+
+func (self *Job) GetId() string {
+	return self.id
 }
 
 func (self *Job) GetTitle() string {
@@ -92,7 +98,7 @@ func (self *Job) GetDelay() time.Duration {
 }
 
 func (self *Job) fn() {
-	xlog.Outf("Job \"%s\" start to crawl\n", self.title)
+	xlog.Outf("Job[%s] \"%s\" start to crawl\n", self.id, self.title)
 
 	self.runAt = time.Now()
 

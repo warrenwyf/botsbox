@@ -6,6 +6,7 @@ import (
 )
 
 type Runnable interface {
+	GetId() string
 	GetTitle() string
 	GetFn() func()
 	GetInterval() time.Duration
