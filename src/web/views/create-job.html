@@ -13,12 +13,6 @@
 	<link rel="stylesheet" href="/static/css/uikit-components/notify.min.css">
 	<link rel="stylesheet" href="/static/css/codemirror.css">
 	<link rel="stylesheet" href="/static/css/codemirror-monokai.css">
-
-	<style type="text/css">
-	.CodeMirror-scroll {
-		height: 100%;
-	}
-	</style>
 </head>
 
 <body>
@@ -57,9 +51,12 @@
 	<script src="/static/js/uikit-components/notify.min.js"></script>
 	<script src="/static/js/codemirror.js"></script>
 	<script src="/static/js/codemirror-javascript.js"></script>
+	<script src="/static/js/d3.min.js"></script>
+	<script src="/static/js/utils.js"></script>
 
 	<script type="text/javascript">
 	var h = $('#body-container').height() - $('#header').height() - $('#header').offset().top;
+	$('#rule-viz').height(h);
 
 	var vm = new Vue({
 
@@ -67,6 +64,7 @@
 
 		data: {
 			ruleEditor: null,
+			ruleVizTimeoutId: null,
 
 			saving: false,
 		},
@@ -79,14 +77,13 @@
 	"$entries": [
 		{
 			"$name": "index_page",
-			"$url": "https://news.baidu.com"
+			"$url": "https://<your-target>"
 		}
 	],
 	"index_page": {
 		"$outputs": [
 			{
-				"$name": "baidu_hotnews",
-				"$id": "$title",
+				"$name": "<dataset-name>",
 				"$data": {
 					"title": "$title",
 					"page": "$raw"
@@ -107,20 +104,45 @@
 			});
 
 			vm.ruleEditor.setSize('100%', h);
+
+			vm.ruleEditor.on('changes', function() {
+				clearTimeout(vm.ruleVizTimeoutId);
+				vm.ruleVizTimeoutId = setTimeout(function() {
+					vm.viz();
+				}, 300);
+			});
+
+			window.addEventListener('resize', function() {
+				vm.viz();
+			})
+
+			vm.viz();
 		},
 
 		methods: {
 
-			save: function() {
+			viz: function() {
 				var vm = this;
 
-				var rule = vm.ruleEditor.getValue();
+				try {
+					var rule = JSON.parse(vm.ruleEditor.getValue());
+					utils.vizRule('#rule-viz', rule, $('#rule-viz').width(), $('#rule-viz').height());
+				} catch (e) {
+					console.error(e);
+				}
+			},
 
+			save: function() {
+				var vm = this;
 
 				if (vm.saving) {
 					return;
 				}
 
+				var rule = vm.ruleEditor.getValue();
+				if (!rule) {
+					return;
+				}
 
 				UIkit.modal.prompt("Give a name:", "", function(title) {
 					if (!title) {
