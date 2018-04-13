@@ -32,15 +32,15 @@
 
 			<ul id="ul-jobs" class="uk-list">
 
-				<li v-for="(job, jobId) in jobs" class="uk-grid" data-uk-grid-match>
+				<li v-for="job in jobs" class="uk-grid" data-uk-grid-match>
 					<div class="uk-width-1-4">
-						<div v-if="activeJobs[jobId]" class="uk-margin-left">
-							<div v-if="activeJobs[jobId].running">
+						<div v-if="activeJobs[job.id]" class="uk-margin-left">
+							<div v-if="activeJobs[job.id].running">
 								<i class="uk-icon-justify uk-icon-sun-o uk-icon-spin uk-text-warning"></i>
 							</div>
 							<div v-else>
 								<i class="uk-icon-justify uk-icon-clock-o uk-text-success"></i>
-								<span class="uk-text-small" v-text="formatTimeInSecs(activeJobs[jobId].next)"></span>
+								<span class="uk-text-small" v-text="formatTimeInSecs(activeJobs[job.id].next)"></span>
 							</div>
 						</div>
 						<div v-else class="uk-margin-left">
@@ -49,14 +49,14 @@
 					</div>
 					<div class="uk-width-1-2 uk-text-break" v-html="job['title']" style="border-left: 1px solid #ddd"></div>
 					<div class="uk-width-1-10">
-						<div v-if="activeJobs[jobId]" class="uk-text-muted" v-text="activeJobs[jobId].crawled"></div>
+						<div v-if="activeJobs[job.id]" class="uk-text-muted" v-text="activeJobs[job.id].crawled"></div>
 					</div>
 					<div class="uk-width-1-10">
 						<div v-if="job['status']=='active'">
-							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-pause" @click="deactiveJob(jobId)"></a>
+							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-pause" @click="deactiveJob(job.id)"></a>
 						</div>
 						<div v-else>
-							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-play" @click="activeJob(jobId)"></a>
+							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-play" @click="activeJob(job.id)"></a>
 						</div>
 					</div>
 				</li>
@@ -72,6 +72,7 @@
 	<script src="/static/js/uikit.min.js"></script>
 	<script src="/static/js/uikit-components/notify.min.js"></script>
 	<script src="/static/js/moment-with-locales.min.js"></script>
+	<script src="/static/js/utils.js"></script>
 
 	<script type="text/javascript">
 	moment.locale(navigator.language);
@@ -81,7 +82,8 @@
 		el: '#body-container',
 
 		data: {
-			jobs: {},
+			jobs: [],
+			jobsIndex: {},
 			activeJobs: {},
 
 			fetchingJobs: false,
@@ -102,50 +104,20 @@
 
 		methods: {
 
-			formatTimeInSecs: function(secs) {
-				var today = moment().startOf('day');
-				var time = moment(secs * 1000);
-
-				str = '';
-
-				if (today.year() != time.year()) {
-					str += time.format('YYYY-');
-				}
-
-				if (today.month() != time.month()) {
-					str += time.format('MM-');
-				}
-
-				if (today.date() != time.date()) {
-					str += time.format('DD');
-				}
-
-				str = str || ' '
-
-				if (today.hour() != time.hour()) {
-					str += time.format('HH:');
-				}
-
-				if (today.minute() != time.minute()) {
-					str += time.format('mm:');
-				}
-
-				str += time.format('ss')
-
-				return str
-			},
+			formatTimeInSecs: utils.formatTimeInSecs,
 
 			fetchJobs: function() {
 				var vm = this;
 
 				vm.fetchingJobs = true;
 				$.get("/api/jobs", function(data) {
-					var jobs = {};
+					var jobsIndex = {};
 					$.each(data['jobs'], function(i, job) {
-						jobs[job.id] = job;
+						jobsIndex[job.id] = i;
 					});
 
-					vm.jobs = jobs;
+					vm.jobs = data['jobs'];
+					vm.jobsIndex = jobsIndex;
 				}, "json").always(function() {
 					vm.fetchingJobs = false;
 				});
@@ -187,9 +159,10 @@
 				$.post("/api/job/" + id + "/active", {}, function(data) {
 					code = data['code'];
 					if (!code) {
-						var job = vm.jobs[id];
+						var index = vm.jobsIndex[id];
+						var job = vm.jobs[index];
 						job['status'] = 'active';
-						vm.$set(vm.jobs, id, job);
+						vm.jobs[index] = job;
 					} else {
 						UIkit.notify('Active failed, please try later', { timeout: 2000, status: 'warning' });
 					}
@@ -211,9 +184,11 @@
 				$.post("/api/job/" + id + "/deactive", {}, function(data) {
 					code = data['code'];
 					if (!code) {
-						var job = vm.jobs[id];
+						var index = vm.jobsIndex[id];
+						var job = vm.jobs[index];
 						job['status'] = 'deactive';
-						vm.$set(vm.jobs, id, job);
+						vm.jobs[index] = job;
+
 						vm.$delete(vm.activeJobs, id);
 					} else {
 						UIkit.notify('Deactive failed, please try later', { timeout: 2000, status: 'warning' });
