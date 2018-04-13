@@ -33,7 +33,7 @@
 			<ul id="ul-jobs" class="uk-list">
 
 				<li v-for="job in jobs" class="uk-grid" data-uk-grid-match>
-					<div class="uk-width-1-4">
+					<div class="uk-width-3-10">
 						<div v-if="activeJobs[job.id]" class="uk-margin-left">
 							<div v-if="activeJobs[job.id].running">
 								<i class="uk-icon-justify uk-icon-sun-o uk-icon-spin uk-text-warning"></i>
@@ -47,18 +47,22 @@
 							<i class="uk-icon-justify uk-icon-ban uk-text-muted"></i>
 						</div>
 					</div>
-					<div class="uk-width-1-2 uk-text-break" style="border-left: 1px solid #ddd">
+					<div class="uk-width-4-10 uk-text-break" style="border-left: 1px solid #ddd">
 						<a class="uk-link" :href="'/job/'+job.id" v-html="job['title']"></a>
 					</div>
 					<div class="uk-width-1-10">
 						<div v-if="activeJobs[job.id]" class="uk-text-muted" v-text="activeJobs[job.id].crawled"></div>
 					</div>
-					<div class="uk-width-1-10">
-						<div v-if="job['status']=='active'">
+					<div class="uk-width-1-5" class="uk-clearfix">
+						<div v-if="job['status']=='active'" class="uk-float-left">
 							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-pause" @click="deactiveJob(job.id)"></a>
 						</div>
-						<div v-else>
+						<div v-else class="uk-float-left">
 							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-play" @click="activeJob(job.id)"></a>
+						</div>
+
+						<div v-if="job['status']!='active'" class="uk-float-right">
+							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-times uk-text-danger uk-margin-right" @click="deleteJob(job.id)"></a>
 						</div>
 					</div>
 				</li>
@@ -93,6 +97,7 @@
 
 			doingActiveJobs: {},
 			doingDeactiveJobs: {},
+			doingDeleteJobs: {},
 
 			loopTimeoutId: null,
 		},
@@ -108,18 +113,25 @@
 
 			formatTimeInSecs: utils.formatTimeInSecs,
 
+			ensureJobsIndex: function() {
+				var vm = this;
+
+				var jobsIndex = {};
+				$.each(vm.jobs, function(i, job) {
+					jobsIndex[job.id] = i;
+				});
+
+				vm.jobsIndex = jobsIndex;
+			},
+
 			fetchJobs: function() {
 				var vm = this;
 
 				vm.fetchingJobs = true;
 				$.get("/api/jobs", function(data) {
-					var jobsIndex = {};
-					$.each(data['jobs'], function(i, job) {
-						jobsIndex[job.id] = i;
-					});
-
 					vm.jobs = data['jobs'];
-					vm.jobsIndex = jobsIndex;
+
+					vm.ensureJobsIndex();
 				}, "json").always(function() {
 					vm.fetchingJobs = false;
 				});
@@ -199,6 +211,31 @@
 					vm.$delete(vm.doingDeactiveJobs, id);
 
 					vm.fetchActiveJobsAndLoop();
+				});
+			},
+
+			deleteJob: function(id) {
+				var vm = this;
+
+				if (vm.doingDeleteJobs[id]) {
+					return;
+				}
+
+				UIkit.modal.confirm("Are you sure?", function() {
+					vm.$set(vm.doingDeleteJobs, id, true);
+					$.post("/api/job/" + id + "/delete", {}, function(data) {
+						code = data['code'];
+						if (!code) {
+							var index = vm.jobsIndex[id];
+							vm.$delete(vm.jobs, index);
+
+							vm.ensureJobsIndex();
+						} else {
+							UIkit.notify('Delete failed, please try later', { timeout: 2000, status: 'warning' });
+						}
+					}, "json").always(function() {
+						vm.$delete(vm.doingDeleteJobs, id);
+					});
 				});
 			},
 

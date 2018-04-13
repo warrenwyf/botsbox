@@ -108,8 +108,16 @@ func (self *SqliteStore) InsertObject(dataset string, fields []string, values []
 }
 
 func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int64, err error) {
-	oidCount := len(oids)
-	if oidCount == 0 {
+	ids := []interface{}{}
+	for _, oid := range oids {
+		id, err := strconv.Atoi(oid)
+		if err == nil {
+			ids = append(ids, id)
+		}
+	}
+
+	idCount := len(ids)
+	if idCount == 0 {
 		return 0, nil
 	}
 
@@ -118,11 +126,11 @@ func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int
 		errSql error
 	)
 
-	if oidCount == 1 {
+	if idCount == 1 {
 		sql = fmt.Sprintf(`DELETE FROM "%s" WHERE _id = ?`, dataset)
 	} else {
-		holders := make([]string, oidCount)
-		for i := 0; i < oidCount; i++ {
+		holders := make([]string, idCount)
+		for i := 0; i < idCount; i++ {
 			holders[i] = "?"
 		}
 		inClause := strings.Join(holders, ",")
@@ -130,7 +138,7 @@ func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int
 		sql = fmt.Sprintf("DELETE FROM %s WHERE _id IN (%s)", dataset, inClause)
 	}
 
-	result, errSql := self.db.Exec(sql, oids)
+	result, errSql := self.db.Exec(sql, ids...)
 	if errSql != nil {
 		return -1, errSql
 	}
@@ -139,6 +147,10 @@ func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int
 }
 
 func (self *SqliteStore) UpdateObject(dataset string, oid string, fields []string, values []interface{}) (count int64, err error) {
+	idInt, errId := strconv.Atoi(oid)
+	if errId != nil {
+		return 0, errId
+	}
 	fieldCount := util.IntMin(len(fields), len(values))
 	if fieldCount <= 0 {
 		return 0, errors.New("No object will be updated")
@@ -152,7 +164,7 @@ func (self *SqliteStore) UpdateObject(dataset string, oid string, fields []strin
 
 	params := make([]interface{}, fieldCount+1)
 	copy(params, values)
-	params[fieldCount] = oid
+	params[fieldCount] = idInt
 
 	sql := fmt.Sprintf(`UPDATE "%s" SET %s WHERE _id=?`, dataset, fvString)
 	result, errSql := self.db.Exec(sql, params...)

@@ -7,6 +7,7 @@ import (
 	"../../crawler/job"
 	"../../runtime"
 	"../../store"
+	"../../xlog"
 )
 
 const ApiPrefix = "/api"
@@ -81,6 +82,8 @@ func UseApiRouter(e *echo.Echo) {
 		code := 0
 		if err != nil {
 			code = 5001
+
+			xlog.Errln("Create job error:", err)
 		}
 
 		result := map[string]interface{}{
@@ -157,9 +160,30 @@ func UseApiRouter(e *echo.Echo) {
 
 		if err != nil {
 			code = 5001
+
+			xlog.Errln("Update job error:", err)
 		} else { // Deactive job after updating
 			hub := app.GetHub()
 			hub.DeactiveJob(id)
+		}
+
+		result := map[string]interface{}{
+			"code": code,
+		}
+
+		return writeJsonResponse(c.Response(), result)
+	})
+
+	e.POST(joinPath(ApiPrefix, "/job/:id/delete"), func(c echo.Context) error {
+		id := c.Param("id")
+
+		code := 0
+
+		_, err := store.GetStore().DeleteObjects(store.JobDataset, []string{id})
+		if err != nil {
+			code = 5001
+
+			xlog.Errln("Delete job error:", err)
 		}
 
 		result := map[string]interface{}{
