@@ -108,7 +108,7 @@ func (h *Hub) ActiveJob(id string) bool {
 			ok = true
 		}
 
-		// Sync store
+		// Update store
 		store.GetStore().UpdateObject(store.JobDataset, id, []string{"status"}, []interface{}{"active"})
 	}
 
@@ -124,10 +124,10 @@ func (h *Hub) DeactiveJob(id string) bool {
 		if ok {
 			xlog.Outln("Job", id, "deactived")
 		}
-
-		// Sync store
-		store.GetStore().UpdateObject(store.JobDataset, id, []string{"status"}, []interface{}{"deactive"})
 	}
+
+	// Update store
+	store.GetStore().UpdateObject(store.JobDataset, id, []string{"status"}, []interface{}{"deactive"})
 
 	return ok
 }

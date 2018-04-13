@@ -90,6 +90,24 @@ func UseApiRouter(e *echo.Echo) {
 		return writeJsonResponse(c.Response(), result)
 	})
 
+	e.GET(joinPath(ApiPrefix, "/job/:id"), func(c echo.Context) error {
+		id := c.Param("id")
+
+		jobObj, err := store.GetStore().GetJob(id)
+		if err != nil {
+			return err
+		}
+
+		result := map[string]interface{}{
+			"id":     jobObj["_id"],
+			"title":  jobObj["title"],
+			"rule":   jobObj["rule"],
+			"status": jobObj["status"],
+		}
+
+		return writeJsonResponse(c.Response(), result)
+	})
+
 	e.POST(joinPath(ApiPrefix, "/job/:id/active"), func(c echo.Context) error {
 		id := c.Param("id")
 
@@ -117,6 +135,31 @@ func UseApiRouter(e *echo.Echo) {
 		code := 0
 		if !ok {
 			code = 5001
+		}
+
+		result := map[string]interface{}{
+			"code": code,
+		}
+
+		return writeJsonResponse(c.Response(), result)
+	})
+
+	e.POST(joinPath(ApiPrefix, "/job/:id/update"), func(c echo.Context) error {
+		id := c.Param("id")
+		title := c.Request().PostFormValue("title")
+		rule := c.Request().PostFormValue("rule")
+
+		code := 0
+
+		_, err := store.GetStore().UpdateObject(store.JobDataset, id,
+			[]string{"title", "rule"},
+			[]interface{}{title, rule})
+
+		if err != nil {
+			code = 5001
+		} else { // Deactive job after updating
+			hub := app.GetHub()
+			hub.DeactiveJob(id)
 		}
 
 		result := map[string]interface{}{

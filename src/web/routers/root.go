@@ -17,8 +17,17 @@ func UseRootRouter(e *echo.Echo) {
 	})
 
 	e.GET("/create-job", func(c echo.Context) error {
-		return c.Render(http.StatusOK, "create-job.html", map[string]interface{}{
+		return c.Render(http.StatusOK, "job-editor.html", map[string]interface{}{
 			"version": runtime.GetVersion(),
+		})
+	})
+
+	e.GET("/job/:id", func(c echo.Context) error {
+		jobId := c.Param("id")
+
+		return c.Render(http.StatusOK, "job-editor.html", map[string]interface{}{
+			"version": runtime.GetVersion(),
+			"jobId":   jobId,
 		})
 	})
 

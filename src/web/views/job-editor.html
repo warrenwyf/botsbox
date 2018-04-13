@@ -27,6 +27,7 @@
 				</div>
 
 				<div class="uk-float-right uk-margin-right">
+					<span v-if="job" v-html="job.title" class="uk-margin-right"></span>
 					<a href="javascript:history.back();" class="uk-icon-button uk-icon-arrow-left"></a>
 					<a href="javascript:;" class="uk-icon-button uk-icon-check" @click="save()"></a>
 				</div>
@@ -63,16 +64,34 @@
 		el: '#body-container',
 
 		data: {
+			jobId: '{{ .jobId }}',
+
+			job: null,
+			fetchingJob: false,
+
 			ruleEditor: null,
 			ruleVizTimeoutId: null,
 
 			saving: false,
 		},
 
+		computed: {
+
+			hasJobId: function() {
+				var vm = this;
+				return vm.jobId && vm.jobId.length > 0;
+			},
+
+		},
+
 		mounted: function() {
 			var vm = this;
 
-			var rulePlaceholder = `{
+			if (vm.hasJobId) {
+				vm.fetchJob(vm.jobId);
+			}
+
+			var rulePlaceholder = vm.hasJobId ? '' : `{
 	"$every": "5m",
 	"$entries": [
 		{
@@ -121,6 +140,21 @@
 
 		methods: {
 
+			fetchJob: function(jobId) {
+				var vm = this;
+
+				vm.fetchingJob = true;
+				$.get("/api/job/" + jobId, function(data) {
+					vm.job = data;
+
+					if (data['rule']) {
+						vm.ruleEditor.setValue(data['rule']);
+					}
+				}, "json").always(function() {
+					vm.fetchingJob = false;
+				});
+			},
+
 			viz: function() {
 				var vm = this;
 
@@ -144,26 +178,68 @@
 					return;
 				}
 
-				UIkit.modal.prompt("Give a name:", "", function(title) {
-					if (!title) {
-						UIkit.notify('Name is required', { timeout: 2000, status: 'danger' });
-						return;
-					}
-
-					vm.saving = true;
-					$.post("/api/createJob", {
-						title: title,
-						rule: rule,
-					}, function(data) {
-						code = data['code'];
-						if (!code) {
-							location.href = '/';
-						} else {
-							UIkit.notify('Save failed, please try later', { timeout: 2000, status: 'warning' });
+				if (vm.hasJobId) {
+					UIkit.modal.prompt("Update name:", (vm.job && vm.job.title) || "", function(title) {
+						if (!title) {
+							UIkit.notify('Name is required', { timeout: 2000, status: 'danger' });
+							return;
 						}
-					}, "json").always(function() {
-						vm.saving = false;
+
+						vm.updateJob(vm.jobId, title, rule);
 					});
+				} else {
+					UIkit.modal.prompt("Give a name:", "", function(title) {
+						if (!title) {
+							UIkit.notify('Name is required', { timeout: 2000, status: 'danger' });
+							return;
+						}
+
+						vm.createJob(title, rule);
+					});
+				}
+			},
+
+			createJob: function(title, rule) {
+				var vm = this;
+
+				vm.saving = true;
+				$.post("/api/createJob", {
+					title: title,
+					rule: rule,
+				}, function(data) {
+					code = data['code'];
+					if (!code) {
+						UIkit.modal.blockUI("Job created! Redirect after 2 sec...");
+						setTimeout(function() {
+							location.href = '/';
+						}, 2000);
+					} else {
+						UIkit.notify('Save failed, please try later', { timeout: 2000, status: 'warning' });
+					}
+				}, "json").always(function() {
+					vm.saving = false;
+				});
+			},
+
+			updateJob: function(jobId, title, rule) {
+				var vm = this;
+
+				vm.saving = true;
+				$.post("/api/job/" + jobId + "/update", {
+					title: title,
+					rule: rule,
+				}, function(data) {
+					code = data['code'];
+					if (!code) {
+						UIkit.modal.blockUI("Job updated! Redirect after 2 sec...");
+						setTimeout(function() {
+							location.href = '/';
+						}, 2000);
+					} else {
+						UIkit.notify('Save failed, please try later', { timeout: 2000, status: 'warning' });
+					}
+				}, "json").always(function() {
+					vm.saving = false;
 				});
 			},
 
