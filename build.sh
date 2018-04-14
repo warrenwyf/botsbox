@@ -6,6 +6,7 @@ export GOPATH=~/go
 export PATH=$PATH:$GOPATH/bin
 
 echo "go get packages ..."
+go get golang.org/x/net/...
 go get github.com/petar/GoLLRB/llrb
 go get github.com/tidwall/gjson
 go get github.com/PuerkitoBio/goquery

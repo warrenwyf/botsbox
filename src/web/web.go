@@ -29,6 +29,7 @@ func Start() {
 
 	routers.UseRootRouter(e)
 	routers.UseApiRouter(e)
+	routers.UseWsRouter(e)
 
 	err := e.Start(fmt.Sprintf(":%d", conf.HttpPort))
 	if err != nil {
