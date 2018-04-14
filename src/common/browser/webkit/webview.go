@@ -165,6 +165,7 @@ func (self *WebView) Destroy() {
 	// }
 
 	C.webkit_web_view_try_close(self.cWebView)
+	C.gtk_widget_destroy(self.cGtkWidget)
 
 	self.window = nil
 	self.cGtkWidget = nil
