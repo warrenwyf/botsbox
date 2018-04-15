@@ -6,6 +6,7 @@ import (
 	"../common/schedule"
 	"../crawler/job"
 	"../crawler/sink"
+	"../crawler/testrun"
 	"../store"
 	"../xlog"
 )
@@ -18,6 +19,8 @@ var (
 type Hub struct {
 	sink        *sink.Sink
 	jobSchedule *schedule.Schedule
+
+	testrunner *testrun.Runner
 }
 
 func GetHub() *Hub {
@@ -25,6 +28,8 @@ func GetHub() *Hub {
 		hubSingleton = &Hub{
 			sink:        sink.NewSink(),
 			jobSchedule: schedule.NewSchedule(),
+
+			testrunner: testrun.NewRunner(),
 		}
 	})
 
@@ -130,4 +135,16 @@ func (h *Hub) DeactiveJob(id string) bool {
 	store.GetStore().UpdateObject(store.JobDataset, id, []string{"status"}, []interface{}{"deactive"})
 
 	return ok
+}
+
+func (h *Hub) TestrunJob(rule string) (uint64, error) {
+	return h.testrunner.Run(rule)
+}
+
+func (h *Hub) CancelTestrunJob() {
+	h.testrunner.CancelRunning()
+}
+
+func (h *Hub) GetTestrunOutput() <-chan string {
+	return h.testrunner.OutputChan
 }

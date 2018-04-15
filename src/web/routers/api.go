@@ -193,4 +193,37 @@ func UseApiRouter(e *echo.Echo) {
 		return writeJsonResponse(c.Response(), result)
 	})
 
+	e.POST(joinPath(ApiPrefix, "/testrun"), func(c echo.Context) error {
+		rule := c.Request().PostFormValue("rule")
+
+		hub := app.GetHub()
+		id, err := hub.TestrunJob(rule)
+
+		code := 0
+
+		if err != nil {
+			code = 5001
+
+			xlog.Errln("Testrun job error:", err)
+		}
+
+		result := map[string]interface{}{
+			"code": code,
+			"id":   id,
+		}
+
+		return writeJsonResponse(c.Response(), result)
+	})
+
+	e.POST(joinPath(ApiPrefix, "/testrun/cancel"), func(c echo.Context) error {
+		hub := app.GetHub()
+		hub.CancelTestrunJob()
+
+		result := map[string]interface{}{
+			"code": 0,
+		}
+
+		return writeJsonResponse(c.Response(), result)
+	})
+
 }

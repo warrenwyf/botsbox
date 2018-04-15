@@ -33,11 +33,14 @@ type Job struct {
 	targetNotifyChan       chan *target.Target       // Notify target's status has changed
 	targetNotifyChanClosed bool
 
-	sinkChan          chan<- *sink.SinkPack
-	sinkChanConnected bool
+	sinkChan chan<- *sink.SinkPack
 
 	runAt               time.Time
 	crawledTargetsCount uint64
+
+	testrunning       bool // true means job is in running in testrun mode
+	testrunCancelFlag bool // true means job should interrupt ASAP
+	testrunChan       chan<- string
 }
 
 func NewJob(id string, title string, ruleContent string) (*Job, error) {
@@ -60,8 +63,6 @@ func NewJob(id string, title string, ruleContent string) (*Job, error) {
 		targetsQueue:      queue.NewPriorityQueue(),
 		targetsInCrawling: map[uint64]*target.Target{},
 
-		sinkChanConnected: false,
-
 		crawledTargetsCount: 0,
 	}
 
@@ -75,6 +76,15 @@ func NewJobWithFile(id string, title string, rulePath string) (*Job, error) {
 	}
 
 	return NewJob(id, title, string(b))
+}
+
+func (self *Job) Testrun() {
+	self.testrunning = true
+	defer func() {
+		self.testrunning = false
+	}()
+
+	self.fn()
 }
 
 func (self *Job) GetId() string {
@@ -97,8 +107,16 @@ func (self *Job) GetDelay() time.Duration {
 	return self.delay
 }
 
+func (self *Job) inTestrunMode() bool {
+	return self.testrunning && self.testrunChan != nil
+}
+
 func (self *Job) fn() {
-	xlog.Outf("Job[%s] \"%s\" start to crawl\n", self.id, self.title)
+	if self.inTestrunMode() {
+		self.testrunChan <- "Start to crawl"
+	} else {
+		xlog.Outf("Job[%s] \"%s\" start to crawl\n", self.id, self.title)
+	}
 
 	self.runAt = time.Now()
 
@@ -118,14 +136,25 @@ func (self *Job) fn() {
 			for _, t := range targets {
 				self.targetsQueue.Push(t)
 			}
+
+			if self.inTestrunMode() {
+				self.testrunChan <- fmt.Sprintf("Entry[%s] has %d targets", entry.Name, len(targets))
+			}
+		} else {
+			if self.inTestrunMode() {
+				self.testrunChan <- fmt.Sprintf("Entry[%s] has no target template")
+			}
 		}
 	}
 
 	// Check all targets crawled
 	for {
+		if self.testrunning && self.testrunCancelFlag {
+			break
+		}
+
 		runningCount := len(self.targetsInCrawling)
 		waitingCount := self.targetsQueue.Len()
-
 		if runningCount == 0 && waitingCount == 0 {
 			break
 		}
@@ -136,6 +165,10 @@ func (self *Job) fn() {
 				self.targetsInCrawling[t.GetId()] = t
 
 				go self.crawl(t)
+
+				if self.inTestrunMode() {
+					self.testrunChan <- fmt.Sprintf("Target[%s] start to crawl", t.Url)
+				}
 			}
 		}
 
@@ -155,22 +188,43 @@ func (self *Job) fn() {
 				if t != nil {
 
 					if err := t.GetFetchErr(); err != nil { // fetch error
-						xlog.Errln("Fetch target error:", err)
+						if self.inTestrunMode() {
+							self.testrunChan <- fmt.Sprintf("Fetch target error: %v", err)
+						} else {
+							xlog.Errln("Fetch target error:", err)
+						}
 
 						if t.CanRetry() {
 							go self.recrawl(t)
+
+							if self.inTestrunMode() {
+								self.testrunChan <- fmt.Sprintf("Retry crawl target[%s]", t.Url)
+							}
 						}
 
 					} else {
 						if t.Analyzed {
 							if t.AnalyzeErr != nil {
-								xlog.Errln("Analyze target error:", t.AnalyzeErr)
+								if self.inTestrunMode() {
+									self.testrunChan <- fmt.Sprintf("Analyze target error: %v", t.AnalyzeErr)
+								} else {
+									xlog.Errln("Analyze target error:", t.AnalyzeErr)
+								}
+
+							} else {
+								if self.inTestrunMode() {
+									self.testrunChan <- fmt.Sprintf("Target[%s] analyzed", t.Url)
+								}
 
 							}
 
 							self.crawledTargetsCount++
 							delete(self.targetsInCrawling, t.GetId())
 						} else {
+							if self.inTestrunMode() {
+								self.testrunChan <- fmt.Sprintf("Target[%s] crawled", t.Url)
+							}
+
 							go self.analyze(t)
 
 						}
@@ -184,15 +238,30 @@ func (self *Job) fn() {
 
 		elapse := time.Now().Sub(self.runAt)
 		if self.timeout > 0 && elapse > self.timeout { // Check timeout
-			xlog.Outf("Job \"%s\" did not finish crawling, timeout\n", self.title)
+			if self.inTestrunMode() {
+				self.testrunChan <- "Did not finish crawling, timeout"
+			} else {
+				xlog.Outf("Job[%s] \"%s\" did not finish crawling, timeout\n", self.id, self.title)
+			}
+
 			break
 		} else if elapse > self.interval && self.crawledTargetsCount == 0 { // Check crawled count
-			xlog.Outf("Job \"%s\" did not crawl anything during interval time\n", self.title)
+			if self.inTestrunMode() {
+				self.testrunChan <- "Did not crawl anything during interval time"
+			} else {
+				xlog.Outf("Job[%s] \"%s\" did not crawl anything during interval time\n", self.id, self.title)
+			}
+
 			break
 		}
 	}
 
-	xlog.Outf("Job \"%s\" finished crawling\n", self.title)
+	if self.inTestrunMode() {
+		self.testrunChan <- fmt.Sprintf("Finished, total crawled %d targets", self.crawledTargetsCount)
+	} else {
+		xlog.Outf("Job[%s] \"%s\" finished crawling\n", self.id, self.title)
+	}
+
 }
 
 func (self *Job) GetRunAt() time.Time {
@@ -205,7 +274,16 @@ func (self *Job) GetCrawledTargetsCount() uint64 {
 
 func (self *Job) ConnectSink(sink *sink.Sink) {
 	self.sinkChan = sink.C
-	self.sinkChanConnected = true
+}
+
+func (self *Job) ConnectTestrunOutput(c chan string) {
+	self.testrunChan = c
+}
+
+func (self *Job) CancelTestrun() {
+	self.testrunChan = nil
+
+	self.testrunCancelFlag = true
 }
 
 func (self *Job) crawl(t *target.Target) {
@@ -325,7 +403,7 @@ func (self *Job) analyze(t *target.Target) {
 		}
 
 		// Save crawled data to sink
-		if self.sinkChanConnected {
+		if self.sinkChan != nil {
 			for _, pack := range analyzerResult.SinkPacks {
 				self.sinkChan <- pack
 			}

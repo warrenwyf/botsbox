@@ -13,6 +13,16 @@
 	<link rel="stylesheet" href="/static/css/uikit-components/notify.min.css">
 	<link rel="stylesheet" href="/static/css/codemirror.css">
 	<link rel="stylesheet" href="/static/css/codemirror-monokai.css">
+
+	<style type="text/css">
+	#rule-testrun {
+		padding: 8px;
+		background: #272822;
+		color: cyan;
+		overflow: auto;
+		word-wrap: break-word;
+	}
+	</style>
 </head>
 
 <body>
@@ -28,8 +38,12 @@
 
 				<div class="uk-float-right uk-margin-right">
 					<span v-if="job" v-html="job.title" class="uk-margin-right"></span>
-					<a href="javascript:history.back();" class="uk-icon-button uk-icon-arrow-left"></a>
-					<a href="javascript:;" class="uk-icon-button uk-icon-check" @click="save()"></a>
+					<a href="javascript:history.back();" class="uk-icon-button uk-icon-arrow-left" title="Back"></a>
+
+					<a v-if="!testrunning" href="javascript:;" class="uk-icon-button uk-icon-bug" @click="startTestrun()" title="Test Run"></a>
+					<a v-else href="javascript:;" class="uk-icon-button uk-icon-stop" @click="cancelTestrun()" title="Cancel Test Run"></a>
+
+					<a href="javascript:;" class="uk-icon-button uk-icon-check" @click="save()" title="Save"></a>
 				</div>
 			</div>
 
@@ -40,7 +54,9 @@
 
 			<div id="rule-viz" class="uk-width-1-2"></div>
 
-			<div id="rule-editor" class="uk-width-1-2"></div>
+			<div v-show="!testrunning" id="rule-editor" class="uk-width-1-2"></div>
+
+			<div v-show="testrunning" id="rule-testrun" class="uk-width-1-2"></div>
 
 		</div>
 
@@ -50,14 +66,31 @@
 	<script src="/static/js/vue.min.js"></script>
 	<script src="/static/js/uikit.min.js"></script>
 	<script src="/static/js/uikit-components/notify.min.js"></script>
+	<script src="/static/js/moment-with-locales.min.js"></script>
 	<script src="/static/js/codemirror.js"></script>
 	<script src="/static/js/codemirror-javascript.js"></script>
 	<script src="/static/js/d3.min.js"></script>
 	<script src="/static/js/utils.js"></script>
 
 	<script type="text/javascript">
+	moment.locale(navigator.language);
+
 	var h = $('#body-container').height() - $('#header').height() - $('#header').offset().top;
 	$('#rule-viz').height(h);
+	$('#rule-editor').height(h);
+	$('#rule-testrun').height(h - 16); // With padding=8px
+
+	var wsProtocol = (location.protocol === 'https:') ? 'wss:' : 'ws:';
+	var wsUrl = wsProtocol + '//' + location.host + '/ws';
+	var ws = new WebSocket(wsUrl);
+	ws.onopen = function() {
+		console.log('Test Run channel connected')
+	}
+	ws.onmessage = function(evt) {
+		$('#rule-testrun').append('<div>[ ' + moment().format('YYYY-MM-DD HH:mm:ss') + ' ]</div>');
+		$('#rule-testrun').append('<div>➜ ' + evt.data + '</div>');
+		$('#rule-testrun').scrollTop($('#rule-testrun').prop("scrollHeight"));
+	}
 
 	var vm = new Vue({
 
@@ -71,6 +104,8 @@
 
 			ruleEditor: null,
 			ruleVizTimeoutId: null,
+
+			testrunning: false,
 
 			saving: false,
 		},
@@ -164,6 +199,35 @@
 				} catch (e) {
 					console.error(e);
 				}
+			},
+
+			startTestrun: function() {
+				var vm = this;
+
+				vm.testrunning = true;
+
+				$('#rule-testrun').empty();
+				$('#rule-testrun').append('<div>----------</div>');
+				$('#rule-testrun').append('<div> Test Run </div>');
+				$('#rule-testrun').append('<div>----------</div>');
+
+				var rule = vm.ruleEditor.getValue();
+				$.post("/api/testrun", {
+					rule: rule,
+				}, function(data) {
+					code = data['code'];
+					if (!!code) {
+						$('#rule-testrun').append('<div><i class="uk-icon-exclamation-circle uk-icon-justify uk-text-danger"></i> Failed to start</div>');
+					}
+				}, "json");
+			},
+
+			cancelTestrun: function() {
+				var vm = this;
+
+				vm.testrunning = false;
+
+				$.post("/api/testrun/cancel", {}, function(data) {}, "json");
 			},
 
 			save: function() {

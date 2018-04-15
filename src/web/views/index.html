@@ -27,7 +27,7 @@
 		<div id="jobs-container" class="uk-margin-large-top uk-container-center uk-width-1-1 uk-width-xlarge-3-5 uk-width-xxlarge-1-2">
 
 			<div class="uk-margin-left uk-margin-large-bottom uk-text-large">
-				<a href="/create-job" class="uk-icon-hover uk-icon-plus-square-o"></a>
+				<a href="/create-job" class="uk-icon-hover uk-icon-plus-square-o" title="Create A Job"></a>
 			</div>
 
 			<ul id="ul-jobs" class="uk-list">
@@ -35,34 +35,31 @@
 				<li v-for="job in jobs" class="uk-grid" data-uk-grid-match>
 					<div class="uk-width-3-10">
 						<div v-if="activeJobs[job.id]" class="uk-margin-left">
-							<div v-if="activeJobs[job.id].running">
+							<div v-if="activeJobs[job.id].running" title="Running">
 								<i class="uk-icon-justify uk-icon-sun-o uk-icon-spin uk-text-warning"></i>
 							</div>
-							<div v-else>
+							<div v-else title="Waiting">
 								<i class="uk-icon-justify uk-icon-clock-o uk-text-success"></i>
 								<span class="uk-text-small" v-text="formatTimeInSecs(activeJobs[job.id].next)"></span>
 							</div>
-						</div>
-						<div v-else class="uk-margin-left">
-							<i class="uk-icon-justify uk-icon-ban uk-text-muted"></i>
 						</div>
 					</div>
 					<div class="uk-width-4-10 uk-text-break" style="border-left: 1px solid #ddd">
 						<a class="uk-link" :href="'/job/'+job.id" v-html="job['title']"></a>
 					</div>
 					<div class="uk-width-1-10">
-						<div v-if="activeJobs[job.id]" class="uk-text-muted" v-text="activeJobs[job.id].crawled"></div>
+						<div v-if="activeJobs[job.id]" class="uk-text-muted" v-text="activeJobs[job.id].crawled" title="Crawled Targets"></div>
 					</div>
 					<div class="uk-width-1-5" class="uk-clearfix">
 						<div v-if="job['status']=='active'" class="uk-float-left">
-							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-pause" @click="deactiveJob(job.id)"></a>
+							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-pause" @click="deactiveJob(job.id)" title="Deactive"></a>
 						</div>
 						<div v-else class="uk-float-left">
-							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-play" @click="activeJob(job.id)"></a>
+							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-play" @click="activeJob(job.id)" title="Active"></a>
 						</div>
 
 						<div v-if="job['status']!='active'" class="uk-float-right">
-							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-times uk-text-danger uk-margin-right" @click="deleteJob(job.id)"></a>
+							<a href="javascript:;" class="uk-icon-justify uk-icon-hover uk-icon-times uk-text-danger uk-margin-right" @click="deleteJob(job.id)" title="Delete"></a>
 						</div>
 					</div>
 				</li>
