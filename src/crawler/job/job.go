@@ -80,6 +80,8 @@ func NewJobWithFile(id string, title string, rulePath string) (*Job, error) {
 
 func (self *Job) Testrun() {
 	self.testrunning = true
+	self.testrunCancelFlag = false
+
 	defer func() {
 		self.testrunning = false
 	}()
@@ -150,6 +152,9 @@ func (self *Job) fn() {
 	// Check all targets crawled
 	for {
 		if self.testrunning && self.testrunCancelFlag {
+			if self.inTestrunMode() {
+				self.testrunChan <- "Test run cancelled"
+			}
 			break
 		}
 
@@ -167,7 +172,7 @@ func (self *Job) fn() {
 				go self.crawl(t)
 
 				if self.inTestrunMode() {
-					self.testrunChan <- fmt.Sprintf("Target[%s] start to crawl", t.Url)
+					self.testrunChan <- fmt.Sprintf("Target[%s] start to crawl...", t.Url)
 				}
 			}
 		}
@@ -196,10 +201,6 @@ func (self *Job) fn() {
 
 						if t.CanRetry() {
 							go self.recrawl(t)
-
-							if self.inTestrunMode() {
-								self.testrunChan <- fmt.Sprintf("Retry crawl target[%s]", t.Url)
-							}
 						}
 
 					} else {
@@ -222,7 +223,12 @@ func (self *Job) fn() {
 							delete(self.targetsInCrawling, t.GetId())
 						} else {
 							if self.inTestrunMode() {
-								self.testrunChan <- fmt.Sprintf("Target[%s] crawled", t.Url)
+								fetchErr := t.GetFetchErr()
+								if fetchErr != nil {
+									self.testrunChan <- fmt.Sprintf("Target[%s] crawled, error: %v", t.Url, fetchErr)
+								} else {
+									self.testrunChan <- fmt.Sprintf("Target[%s] crawled, result: \n <div class='result'>%s</div>", t.Url, t.GetFetchResult().ToString())
+								}
 							}
 
 							go self.analyze(t)
@@ -258,6 +264,7 @@ func (self *Job) fn() {
 
 	if self.inTestrunMode() {
 		self.testrunChan <- fmt.Sprintf("Finished, total crawled %d targets", self.crawledTargetsCount)
+		self.testrunChan <- "$finished"
 	} else {
 		xlog.Outf("Job[%s] \"%s\" finished crawling\n", self.id, self.title)
 	}
@@ -297,7 +304,15 @@ func (self *Job) crawl(t *target.Target) {
 func (self *Job) recrawl(t *target.Target) {
 	delay := t.RetryWait
 	if delay > 0 {
+		if self.inTestrunMode() {
+			self.testrunChan <- fmt.Sprintf("Retry crawl target[%s] after %ds", t.Url, delay/time.Second)
+		}
+
 		time.Sleep(delay)
+	}
+
+	if self.inTestrunMode() {
+		self.testrunChan <- fmt.Sprintf("Retry crawl target[%s] ...", t.Url)
 	}
 
 	self.crawl(t)
@@ -380,34 +395,65 @@ func (self *Job) analyze(t *target.Target) {
 
 		// Check mtag
 		mtag := analyzerResult.Mtag
-		if len(mtag) > 0 {
-			// Check exists mtag
-			hash := t.GetHash()
-			storedTarget, _ := store.GetStore().GetLatestTarget(hash)
-			if storedTarget != nil {
-				storedMtag := storedTarget["mtag"].(string)
-				if mtag == storedMtag {
-					return
+		if self.inTestrunMode() {
+			self.testrunChan <- fmt.Sprintf("Target[%s] has mtag: %s", t.Url, mtag)
+
+		} else {
+			if len(mtag) > 0 {
+				// Check exists mtag
+				hash := t.GetHash()
+				storedTarget, _ := store.GetStore().GetLatestTarget(hash)
+				if storedTarget != nil {
+					storedMtag := storedTarget["mtag"].(string)
+					if mtag == storedMtag {
+						return
+					}
 				}
+
+				// Save mtag
+				store.GetStore().InsertObject(store.TargetDataset,
+					[]string{"hash", "mtag"},
+					[]interface{}{hash, mtag})
 			}
 
-			// Save mtag
-			store.GetStore().InsertObject(store.TargetDataset,
-				[]string{"hash", "mtag"},
-				[]interface{}{hash, mtag})
 		}
 
 		// Crawl deeper target
 		for _, t := range analyzerResult.Targets {
 			self.targetsQueue.Push(t)
-		}
 
-		// Save crawled data to sink
-		if self.sinkChan != nil {
-			for _, pack := range analyzerResult.SinkPacks {
-				self.sinkChan <- pack
+			if self.inTestrunMode() {
+				self.testrunChan <- fmt.Sprintf("Target[%s] added to queue", t.Url)
 			}
 		}
+
+		// Save crawled data
+		sinkPacks := analyzerResult.SinkPacks
+		if self.inTestrunMode() {
+			if len(sinkPacks) > 0 {
+				logs := []string{fmt.Sprintf("Target[%s] has sink packs:", t.Url)}
+				for _, pack := range sinkPacks {
+					logs = append(logs, fmt.Sprintf("%+v", pack))
+				}
+
+				self.testrunChan <- strings.Join(logs, "<br>")
+			} else {
+				self.testrunChan <- fmt.Sprintf("Target[%s] has no sink pack", t.Url)
+			}
+		} else {
+			if self.sinkChan != nil {
+				for _, pack := range sinkPacks {
+					self.sinkChan <- pack
+				}
+			}
+
+		}
+
+	} else {
+		if self.inTestrunMode() {
+			self.testrunChan <- fmt.Sprintf("Target[%s] has no analyzed result", t.Url)
+		}
+
 	}
 
 }

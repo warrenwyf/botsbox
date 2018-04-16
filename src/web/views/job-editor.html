@@ -22,6 +22,14 @@
 		overflow: auto;
 		word-wrap: break-word;
 	}
+
+	#rule-testrun .time {
+		color: #999;
+	}
+
+	#rule-testrun .result {
+		background: #fff
+	}
 	</style>
 </head>
 
@@ -36,14 +44,17 @@
 					<span class="uk-margin-small-left">botsbox<small class="uk-text-muted uk-margin-small-left">{{ .version }}</small></span>
 				</div>
 
-				<div class="uk-float-right uk-margin-right">
+				<div v-if="!testrun" class="uk-float-right uk-margin-right">
 					<span v-if="job" v-html="job.title" class="uk-margin-right"></span>
-					<a href="javascript:history.back();" class="uk-icon-button uk-icon-arrow-left" title="Back"></a>
-
-					<a v-if="!testrunning" href="javascript:;" class="uk-icon-button uk-icon-bug" @click="startTestrun()" title="Test Run"></a>
-					<a v-else href="javascript:;" class="uk-icon-button uk-icon-stop" @click="cancelTestrun()" title="Cancel Test Run"></a>
+					<a href="javascript:;" class="uk-icon-button uk-icon-arrow-left" @click="back()" title="Back"></a>
 
 					<a href="javascript:;" class="uk-icon-button uk-icon-check" @click="save()" title="Save"></a>
+
+					<a href="javascript:;" class="uk-icon-button uk-icon-bug" @click="startTestrun()" title="Test Run"></a>
+				</div>
+				<div v-else class="uk-float-right uk-margin-right">
+					<a v-if="testrunning" href="javascript:;" class="uk-icon-button uk-icon-stop" @click="cancelTestrun()" title="Cancel Test Run"></a>
+					<a v-else href="javascript:;" class="uk-icon-button uk-icon-sign-out" @click="closeTestrunPanel()" title="Close Test Run Panel"></a>
 				</div>
 			</div>
 
@@ -54,9 +65,9 @@
 
 			<div id="rule-viz" class="uk-width-1-2"></div>
 
-			<div v-show="!testrunning" id="rule-editor" class="uk-width-1-2"></div>
+			<div v-show="!testrun" id="rule-editor" class="uk-width-1-2"></div>
 
-			<div v-show="testrunning" id="rule-testrun" class="uk-width-1-2"></div>
+			<div v-show="testrun" id="rule-testrun" class="uk-width-1-2"></div>
 
 		</div>
 
@@ -86,10 +97,28 @@
 	ws.onopen = function() {
 		console.log('Test Run channel connected')
 	}
+	ws.onclose = function() {
+		console.log('Test Run channel closed')
+	}
+	ws.onerror = function() {
+		console.error('Test Run channel error')
+	};
 	ws.onmessage = function(evt) {
-		$('#rule-testrun').append('<div>[ ' + moment().format('YYYY-MM-DD HH:mm:ss') + ' ]</div>');
-		$('#rule-testrun').append('<div>➜ ' + evt.data + '</div>');
-		$('#rule-testrun').scrollTop($('#rule-testrun').prop("scrollHeight"));
+		var msg = evt.data;
+		try {
+			if (msg == "$finished") {
+				vm.testrunning = false;
+			} else {
+				$('#rule-testrun').append('<div class="time">[ ' + moment().format('YYYY-MM-DD HH:mm:ss') + ' ]</div>');
+				$('#rule-testrun').append('<div class="log">➜ ' + msg + '</div>');
+
+
+				$('body>:not(#body-container, script)').remove(); // Some pages append content at footer
+				$('#rule-testrun').scrollTop($('#rule-testrun').prop("scrollHeight"));
+			}
+		} catch (e) {
+			console.error(e);
+		}
 	}
 
 	var vm = new Vue({
@@ -105,6 +134,7 @@
 			ruleEditor: null,
 			ruleVizTimeoutId: null,
 
+			testrun: false,
 			testrunning: false,
 
 			saving: false,
@@ -153,6 +183,7 @@
 					name: "javascript",
 					json: true,
 				},
+				indentUnit: 4,
 				theme: 'monokai',
 				lineNumbers: true,
 			});
@@ -190,12 +221,30 @@
 				});
 			},
 
+			back: function() {
+				var vm = this;
+
+				if (vm.job) {
+					var oldRule = vm.job.rule;
+					var newRule = vm.ruleEditor.getValue();
+
+					if (oldRule != newRule) {
+						UIkit.modal.confirm("Are you sure to discard unsaved changes?", function() {
+							history.back();
+						});
+						return;
+					}
+				}
+
+				history.back();
+			},
+
 			viz: function() {
 				var vm = this;
 
 				try {
-					var rule = JSON.parse(vm.ruleEditor.getValue());
-					utils.vizRule('#rule-viz', rule, $('#rule-viz').width(), $('#rule-viz').height());
+					var json = JSON.parse(vm.ruleEditor.getValue());
+					utils.vizRule('#rule-viz', json, $('#rule-viz').width(), $('#rule-viz').height());
 				} catch (e) {
 					console.error(e);
 				}
@@ -204,19 +253,33 @@
 			startTestrun: function() {
 				var vm = this;
 
-				vm.testrunning = true;
+				var rule = vm.ruleEditor.getValue();
+
+				try {
+					JSON.parse(rule);
+				} catch (e) {
+					console.error(e);
+
+					// Invalid json
+					UIkit.notify('Invalid JSON format', { timeout: 2000, status: 'danger' });
+					return;
+				}
+
+				vm.testrun = true;
 
 				$('#rule-testrun').empty();
 				$('#rule-testrun').append('<div>----------</div>');
 				$('#rule-testrun').append('<div> Test Run </div>');
 				$('#rule-testrun').append('<div>----------</div>');
 
-				var rule = vm.ruleEditor.getValue();
 				$.post("/api/testrun", {
 					rule: rule,
 				}, function(data) {
 					code = data['code'];
-					if (!!code) {
+					if (!code) {
+						vm.testrunning = true;
+					} else {
+						vm.testrunning = false;
 						$('#rule-testrun').append('<div><i class="uk-icon-exclamation-circle uk-icon-justify uk-text-danger"></i> Failed to start</div>');
 					}
 				}, "json");
@@ -225,9 +288,17 @@
 			cancelTestrun: function() {
 				var vm = this;
 
-				vm.testrunning = false;
+				vm.testrun = false;
 
-				$.post("/api/testrun/cancel", {}, function(data) {}, "json");
+				$.post("/api/testrun/cancel", {}, function(data) {
+					vm.testrunning = false;
+				}, "json");
+			},
+
+			closeTestrunPanel: function() {
+				var vm = this;
+
+				vm.testrun = false;
 			},
 
 			save: function() {

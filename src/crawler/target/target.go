@@ -94,6 +94,8 @@ func NewTarget() *Target {
 
 		ObjectOutputs: []*rule.ObjectOutput{},
 		ListOutputs:   []*rule.ListOutput{},
+
+		Analyzed: false,
 	}
 }
 

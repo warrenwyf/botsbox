@@ -109,8 +109,9 @@ func (h *Hub) ActiveJob(id string) bool {
 
 		taskId := h.jobSchedule.CreateTask(job)
 		if taskId > 0 {
-			xlog.Outln("Job", id, "actived")
 			ok = true
+
+			xlog.Outf("Job[%s] \"%s\" actived\n", id, job.GetTitle())
 		}
 
 		// Update store
@@ -121,18 +122,28 @@ func (h *Hub) ActiveJob(id string) bool {
 }
 
 func (h *Hub) DeactiveJob(id string) bool {
-	ok := false
-
-	job := h.jobSchedule.GetTaskByRunnableId(id)
-	if job != nil {
-		ok = h.jobSchedule.DeleteTask(job.GetId())
-		if ok {
-			xlog.Outln("Job", id, "deactived")
-		}
+	jobObj, err := store.GetStore().GetJob(id)
+	if err != nil {
+		xlog.Errln("Get job failed:", err)
+		return false
 	}
 
-	// Update store
-	store.GetStore().UpdateObject(store.JobDataset, id, []string{"status"}, []interface{}{"deactive"})
+	ok := false
+
+	if jobObj != nil {
+		title := jobObj["title"]
+
+		job := h.jobSchedule.GetTaskByRunnableId(id)
+		if job != nil {
+			ok = h.jobSchedule.DeleteTask(job.GetId())
+			if ok {
+				xlog.Outf("Job[%s] \"%s\" deactived\n", id, title)
+			}
+		}
+
+		// Update store
+		store.GetStore().UpdateObject(store.JobDataset, id, []string{"status"}, []interface{}{"deactive"})
+	}
 
 	return ok
 }
@@ -146,5 +157,5 @@ func (h *Hub) CancelTestrunJob() {
 }
 
 func (h *Hub) GetTestrunOutput() <-chan string {
-	return h.testrunner.OutputChan
+	return h.testrunner.GetOutputChan()
 }

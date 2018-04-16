@@ -12,16 +12,20 @@ type Runner struct {
 
 	runningJob *job.Job
 
-	OutputChan chan string
+	outputChan chan string
 }
 
 func NewRunner() *Runner {
 	return &Runner{
-		OutputChan: make(chan string),
+		outputChan: make(chan string, 1000),
 	}
 }
 
 func (self *Runner) Run(rule string) (uint64, error) {
+	defer func() {
+		recover()
+	}()
+
 	if self.runningJob != nil { // Interrupt running job
 		self.runningJob.CancelTestrun()
 	}
@@ -34,7 +38,7 @@ func (self *Runner) Run(rule string) (uint64, error) {
 	}
 
 	self.runningJob = j
-	j.ConnectTestrunOutput(self.OutputChan)
+	j.ConnectTestrunOutput(self.outputChan)
 
 	go j.Testrun()
 
@@ -45,4 +49,8 @@ func (self *Runner) CancelRunning() {
 	if self.runningJob != nil { // Interrupt running job
 		self.runningJob.CancelTestrun()
 	}
+}
+
+func (self *Runner) GetOutputChan() chan string {
+	return self.outputChan
 }

@@ -1,5 +1,9 @@
 package fetchers
 
+const (
+	ResultFormat_Bytes = iota
+)
+
 type Fetcher interface {
 	Fetch() (result *Result, err error)
 	Hash() string // Used to compare two fetchers are equal or not
@@ -12,6 +16,11 @@ type Result struct {
 	ContentType string
 }
 
-const (
-	ResultFormat_Bytes = iota
-)
+func (r *Result) ToString() string {
+	switch r.Format {
+	case ResultFormat_Bytes:
+		return string(r.Content.([]byte))
+	}
+
+	return ""
+}
