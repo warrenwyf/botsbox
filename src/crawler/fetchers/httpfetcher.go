@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	neturl "net/url"
 	"strings"
 	"time"
@@ -71,6 +72,11 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 		Timeout:   self.timeout,
 	}
 
+	jar, err := cookiejar.New(nil)
+	if err == nil {
+		client.Jar = jar
+	}
+
 	resp, errResp := client.Do(req)
 	if errResp != nil {
 		return nil, errResp
@@ -82,12 +88,21 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 		return nil, errRead
 	}
 
-	return &Result{
+	result := &Result{
 		Hash:        self.Hash(),
 		Format:      ResultFormat_Bytes,
 		Content:     b,
-		ContentType: resp.Header.Get("Content-Type"),
-	}, nil
+		ContentType: headerValueIgnoreCase(resp.Header, "Content-Type"),
+	}
+
+	if client.Jar != nil {
+		u, err := neturl.Parse(url)
+		if err == nil {
+			result.Cookies = client.Jar.Cookies(u)
+		}
+	}
+
+	return result, nil
 }
 
 func (self *HttpFetcher) SetTimeout(v time.Duration) {

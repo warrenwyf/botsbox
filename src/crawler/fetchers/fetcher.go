@@ -1,5 +1,9 @@
 package fetchers
 
+import (
+	"net/http"
+)
+
 const (
 	ResultFormat_Bytes = iota
 )
@@ -14,6 +18,7 @@ type Result struct {
 	Format      int
 	Content     interface{}
 	ContentType string
+	Cookies     []*http.Cookie
 }
 
 func (r *Result) ToString() string {

@@ -18,6 +18,8 @@ func Test_SetupServer(t *testing.T) {
 	mux.HandleFunc("/", func(res http.ResponseWriter, req *http.Request) {
 		defer req.Body.Close()
 
+		res.Header().Add("Set-Cookie", "foo=bar;Path=/")
+
 		if strings.ToUpper(req.Method) == "GET" {
 			res.Write([]byte("get ok"))
 		} else if strings.ToUpper(req.Method) == "POST" {
@@ -53,6 +55,10 @@ func Test_HttpFetcher_Get(t *testing.T) {
 	if string(result.Content.([]byte)) != "get ok" {
 		t.Fatal("Get result wrong")
 	}
+
+	if len(result.Cookies) == 0 {
+		t.Fatal("Get cookie wrong")
+	}
 }
 
 func Test_HttpFetcher_Post(t *testing.T) {
@@ -72,6 +78,10 @@ func Test_HttpFetcher_Post(t *testing.T) {
 
 	if string(result.Content.([]byte)) != "foo=bar" {
 		t.Fatal("Post result wrong")
+	}
+
+	if len(result.Cookies) == 0 {
+		t.Fatal("Get cookie wrong")
 	}
 }
 
