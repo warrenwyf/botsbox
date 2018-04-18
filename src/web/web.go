@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"os"
 
 	"github.com/labstack/echo"
@@ -20,6 +21,8 @@ func Start() {
 	conf := config.GetConf()
 
 	e.HideBanner = true
+	e.Logger.SetOutput(ioutil.Discard)
+
 	e.Use(middleware.Recover())
 	e.Use(middleware.Static("src/web/static"))
 
