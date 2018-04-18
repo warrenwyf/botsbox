@@ -24,6 +24,7 @@ func (conf *Conf) SyncFromFile(filePath string) error {
 	if errOpen != nil {
 		return errOpen
 	}
+	defer file.Close()
 
 	decoder := json.NewDecoder(file)
 	errDecode := decoder.Decode(&conf)
