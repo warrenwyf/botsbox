@@ -61,15 +61,25 @@ func (self *JsonAnalyzer) parse() (*Result, error) {
 			continue
 		}
 
-		self.doc.Get(selector).ForEach(func(k, v gjson.Result) bool {
+		if strings.HasPrefix(selector, "$") { // Virtual selector, means dive directly
 			t := target.NewTargetWithTemplate(targetTemplate)
 			if t != nil {
-				t.Url = v.String()
+				t.Url = relUrlToAbs(entry.Url, self.baseTarget.Url)
 				result.Targets = append(result.Targets, t)
 			}
 
-			return true
-		})
+		} else {
+			self.doc.Get(selector).ForEach(func(k, v gjson.Result) bool {
+				t := target.NewTargetWithTemplate(targetTemplate)
+				if t != nil {
+					t.Url = v.String()
+					result.Targets = append(result.Targets, t)
+				}
+
+				return true
+			})
+
+		}
 	}
 
 	// Analyze object outputs

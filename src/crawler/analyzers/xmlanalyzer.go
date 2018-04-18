@@ -87,12 +87,22 @@ func (self *XmlAnalyzer) parse() (*Result, error) {
 			continue
 		}
 
-		for _, s := range self.doc.FindElements(selector) {
+		if strings.HasPrefix(selector, "$") { // Virtual selector, means dive directly
 			t := target.NewTargetWithTemplate(targetTemplate)
 			if t != nil {
-				t.Url = actOnXmlUrl(entry.Url, s, self.baseTarget.Url)
+				t.Url = relUrlToAbs(entry.Url, self.baseTarget.Url)
 				result.Targets = append(result.Targets, t)
 			}
+
+		} else {
+			for _, s := range self.doc.FindElements(selector) {
+				t := target.NewTargetWithTemplate(targetTemplate)
+				if t != nil {
+					t.Url = actOnXmlUrl(entry.Url, s, self.baseTarget.Url)
+					result.Targets = append(result.Targets, t)
+				}
+			}
+
 		}
 	}
 

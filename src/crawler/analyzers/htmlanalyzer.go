@@ -89,13 +89,24 @@ func (self *HtmlAnalyzer) parse() (*Result, error) {
 			continue
 		}
 
-		self.doc.Find(selector).Each(func(i int, s *goquery.Selection) {
+		if strings.HasPrefix(selector, "$") { // Virtual selector, means dive directly
 			t := target.NewTargetWithTemplate(targetTemplate)
 			if t != nil {
-				t.Url = actOnHtmlUrl(entry.Url, s, self.baseTarget.Url)
+				t.Url = relUrlToAbs(entry.Url, self.baseTarget.Url)
 				result.Targets = append(result.Targets, t)
 			}
-		})
+
+		} else {
+			self.doc.Find(selector).Each(func(i int, s *goquery.Selection) {
+				t := target.NewTargetWithTemplate(targetTemplate)
+				if t != nil {
+					t.Url = actOnHtmlUrl(entry.Url, s, self.baseTarget.Url)
+					result.Targets = append(result.Targets, t)
+				}
+			})
+
+		}
+
 	}
 
 	// Analyze object outputs
