@@ -231,6 +231,8 @@
 					if (oldRule != newRule) {
 						UIkit.modal.confirm("Are you sure to discard unsaved changes?", function() {
 							history.back();
+						}, {
+							labels: { 'Ok': 'Yes', 'Cancel': 'No' }
 						});
 						return;
 					}
@@ -344,10 +346,16 @@
 				}, function(data) {
 					code = data['code'];
 					if (!code) {
-						UIkit.modal.blockUI("Job created! Redirect after 2 sec...");
-						setTimeout(function() {
+						vm.job = {
+							title: title,
+							rule: rule,
+						};
+
+						UIkit.modal.confirm("Create successful, leave this page?", function() {
 							location.href = '/';
-						}, 2000);
+						}, {
+							labels: { 'Ok': 'Leave', 'Cancel': 'Stay' }
+						});
 					} else {
 						UIkit.notify('Save failed, please try later', { timeout: 2000, status: 'warning' });
 					}
@@ -366,10 +374,16 @@
 				}, function(data) {
 					code = data['code'];
 					if (!code) {
-						UIkit.modal.blockUI("Job updated! Redirect after 2 sec...");
-						setTimeout(function() {
+						vm.job = {
+							title: title,
+							rule: rule,
+						};
+
+						UIkit.modal.confirm("Update successful, leave this page?", function() {
 							location.href = '/';
-						}, 2000);
+						}, {
+							labels: { 'Ok': 'Leave', 'Cancel': 'Stay' }
+						});
 					} else {
 						UIkit.notify('Save failed, please try later', { timeout: 2000, status: 'warning' });
 					}
