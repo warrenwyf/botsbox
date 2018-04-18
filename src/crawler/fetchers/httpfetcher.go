@@ -24,6 +24,8 @@ type HttpFetcher struct {
 	query      map[string]string
 	form       map[string]string
 	resultType string
+	cookies    []*http.Cookie
+	userAgent  string
 }
 
 func NewHttpFetcher() *HttpFetcher {
@@ -67,6 +69,10 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 		}
 	}
 
+	if len(self.userAgent) > 0 {
+		req.Header.Add("User-Agent", self.userAgent)
+	}
+
 	client := http.Client{
 		Transport: httpTransport,
 		Timeout:   self.timeout,
@@ -74,6 +80,11 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 
 	jar, err := cookiejar.New(nil)
 	if err == nil {
+		u, err := neturl.Parse(self.url)
+		if err == nil {
+			jar.SetCookies(u, self.cookies)
+		}
+
 		client.Jar = jar
 	}
 
@@ -99,6 +110,7 @@ func (self *HttpFetcher) Fetch() (*Result, error) {
 		u, err := neturl.Parse(url)
 		if err == nil {
 			result.Cookies = client.Jar.Cookies(u)
+			result.CookiesUrl = u
 		}
 	}
 
@@ -131,6 +143,14 @@ func (self *HttpFetcher) SetForm(v map[string]string) {
 
 func (self *HttpFetcher) SetResultType(v string) {
 	self.resultType = v
+}
+
+func (self *HttpFetcher) SetUserAgent(ua string) {
+	self.userAgent = ua
+}
+
+func (self *HttpFetcher) SetCookies(cookies []*http.Cookie) {
+	self.cookies = cookies
 }
 
 func (self *HttpFetcher) Hash() string {

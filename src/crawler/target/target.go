@@ -2,10 +2,12 @@ package target
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"../../crawler"
 	"../fetchers"
 	"../rule"
 )
@@ -29,13 +31,17 @@ type Target struct {
 	ResultType string
 	ApplyedVar map[string]string
 
+	UserAgent string
+	Cookies   []*http.Cookie
+
 	Age       time.Duration
 	Priority  int64
 	Timeout   time.Duration
 	Retry     int64
 	RetryWait time.Duration
 	Mtag      string
-	Client    string
+	Client    string // Browser or direct HTTP
+	Agents    string // User-Agent emulator
 
 	Dive map[string]*rule.Entry
 
@@ -59,6 +65,7 @@ func NewTargetWithTemplate(template *rule.TargetTemplate) *Target {
 	t.RetryWait = template.RetryWait
 	t.Mtag = template.Mtag
 	t.Client = template.Client
+	t.Agents = template.Agents
 
 	t.Dive = template.Dive
 
@@ -164,6 +171,12 @@ func (self *Target) Crawl() {
 			httpFetcher.SetQuery(self.Query)
 			httpFetcher.SetForm(self.Form)
 			httpFetcher.SetResultType(self.ResultType)
+			if self.Agents == "random" {
+				httpFetcher.SetUserAgent(crawler.RandomUserAgent())
+			} else {
+				httpFetcher.SetUserAgent(self.UserAgent)
+				httpFetcher.SetCookies(self.Cookies)
+			}
 
 			fetcher = httpFetcher
 

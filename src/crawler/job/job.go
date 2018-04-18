@@ -4,10 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"time"
 
 	"../../common/queue"
+	"../../crawler"
 	"../../store"
 	"../../xlog"
 	"../analyzers"
@@ -33,6 +36,9 @@ type Job struct {
 	targetNotifyChan       chan *target.Target       // Notify target's status has changed
 	targetNotifyChanClosed bool
 
+	userAgent      string
+	cookiesManager *cookiejar.Jar
+
 	sinkChan chan<- *sink.SinkPack
 
 	runAt               time.Time
@@ -49,6 +55,8 @@ func NewJob(id string, title string, ruleContent string) (*Job, error) {
 		return nil, err
 	}
 
+	jar, _ := cookiejar.New(nil)
+
 	job := &Job{
 		id:       id,
 		title:    title,
@@ -62,6 +70,9 @@ func NewJob(id string, title string, ruleContent string) (*Job, error) {
 
 		targetsQueue:      queue.NewPriorityQueue(),
 		targetsInCrawling: map[uint64]*target.Target{},
+
+		userAgent:      crawler.RandomUserAgent(),
+		cookiesManager: jar,
 
 		crawledTargetsCount: 0,
 	}
@@ -115,7 +126,7 @@ func (self *Job) inTestrunMode() bool {
 
 func (self *Job) fn() {
 	if self.inTestrunMode() {
-		self.testrunChan <- "Start to crawl"
+		self.testrunChan <- fmt.Sprintf("Start to crawl as [ %s ]", self.userAgent)
 	} else {
 		xlog.Outf("Job[%s] \"%s\" start to crawl\n", self.id, self.title)
 	}
@@ -204,7 +215,8 @@ func (self *Job) fn() {
 						}
 
 					} else {
-						if t.Analyzed {
+						if t.Analyzed { // Target has been analyzed
+
 							if t.AnalyzeErr != nil {
 								if self.inTestrunMode() {
 									self.testrunChan <- fmt.Sprintf("Analyze target error: %v", t.AnalyzeErr)
@@ -221,13 +233,23 @@ func (self *Job) fn() {
 
 							self.crawledTargetsCount++
 							delete(self.targetsInCrawling, t.GetId())
-						} else {
+
+						} else { // Target need analyzing next step
+
+							// Merge cookies to job, like a real browser's behavior
+							fetchResult := t.GetFetchResult()
+							self.mergeCookies(fetchResult)
+
 							if self.inTestrunMode() {
 								fetchErr := t.GetFetchErr()
 								if fetchErr != nil {
 									self.testrunChan <- fmt.Sprintf("Target[%s] crawled, error: %v", t.Url, fetchErr)
 								} else {
-									self.testrunChan <- fmt.Sprintf("Target[%s] crawled, result: \n <div class='result'>%s</div>", t.Url, t.GetFetchResult().ToString())
+									resultStr := ""
+									if fetchResult != nil {
+										resultStr = fetchResult.ToString()
+									}
+									self.testrunChan <- fmt.Sprintf("Target[%s] crawled, result: \n <div class='result'>%s</div>", t.Url, resultStr)
 								}
 							}
 
@@ -294,6 +316,15 @@ func (self *Job) CancelTestrun() {
 }
 
 func (self *Job) crawl(t *target.Target) {
+	// Set UserAgent
+	t.UserAgent = self.userAgent
+
+	// Set Cookies
+	u, err := url.Parse(t.Url)
+	if err == nil {
+		t.Cookies = self.cookiesManager.Cookies(u)
+	}
+
 	t.Crawl()
 
 	if !self.targetNotifyChanClosed {
@@ -456,4 +487,12 @@ func (self *Job) analyze(t *target.Target) {
 
 	}
 
+}
+
+func (self *Job) mergeCookies(fetchResult *fetchers.Result) {
+	if self.cookiesManager == nil || fetchResult == nil {
+		return
+	}
+
+	self.cookiesManager.SetCookies(fetchResult.CookiesUrl, fetchResult.Cookies)
 }

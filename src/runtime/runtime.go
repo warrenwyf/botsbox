@@ -6,6 +6,8 @@ import (
 
 var (
 	ConfigFile string
+	UaFile     string
+
 	DataDir    string
 	LogDir     string
 	WorkingDir string
@@ -17,6 +19,14 @@ func GetAbsConfigFile() string {
 	}
 
 	return path.Join(WorkingDir, ConfigFile)
+}
+
+func GetAbsUaFile() string {
+	if path.IsAbs(UaFile) {
+		return UaFile
+	}
+
+	return path.Join(WorkingDir, UaFile)
 }
 
 func GetAbsDataDir() string {

@@ -23,6 +23,7 @@ func main() {
 			fmt.Println("    -h                 Show help")
 			fmt.Println("    -v, --version      Print version")
 			fmt.Println("    -c, --config       Configuration file path")
+			fmt.Println("    -u, --ua           UserAgents file path")
 			fmt.Println("    -d, --data         Data directory path")
 			fmt.Println("    -l, --log          Log directory path")
 			return
@@ -30,8 +31,11 @@ func main() {
 	}
 
 	var (
-		defaultConfigFile = "./config.json"
+		defaultConfigFile = "./misc/config.json"
 		usageConfigFile   = "Configuration file path"
+
+		defaultUaFile = "./misc/ua.txt"
+		usageUaFile   = "UserAgents file path"
 
 		defaultDataDir = "./data"
 		usageDataDir   = "Data directory path"
@@ -42,6 +46,8 @@ func main() {
 
 	flag.StringVar(&runtime.ConfigFile, "c", defaultConfigFile, usageConfigFile)
 	flag.StringVar(&runtime.ConfigFile, "config", defaultConfigFile, usageConfigFile)
+	flag.StringVar(&runtime.UaFile, "u", defaultUaFile, usageUaFile)
+	flag.StringVar(&runtime.UaFile, "ua", defaultUaFile, usageUaFile)
 	flag.StringVar(&runtime.DataDir, "d", defaultDataDir, usageDataDir)
 	flag.StringVar(&runtime.DataDir, "data", defaultDataDir, usageDataDir)
 	flag.StringVar(&runtime.LogDir, "l", defaultLogDir, usageLogDir)

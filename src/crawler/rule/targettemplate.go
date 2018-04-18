@@ -17,6 +17,7 @@ type TargetTemplate struct {
 	RetryWait time.Duration
 	Mtag      string
 	Client    string
+	Agents    string
 
 	Dive map[string]*Entry
 
@@ -85,6 +86,11 @@ func NewTargetTemplateWithJson(elem *gjson.Result) *TargetTemplate {
 	clientElem := elem.Get("$client")
 	if clientElem.Exists() {
 		t.Client = clientElem.String()
+	}
+
+	agentsElem := elem.Get("$agents")
+	if agentsElem.Exists() {
+		t.Agents = agentsElem.String()
 	}
 
 	diveElem := elem.Get("$dive")

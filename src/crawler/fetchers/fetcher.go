@@ -2,6 +2,7 @@ package fetchers
 
 import (
 	"net/http"
+	"net/url"
 )
 
 const (
@@ -14,11 +15,14 @@ type Fetcher interface {
 }
 
 type Result struct {
-	Hash        string
+	Hash string
+
 	Format      int
 	Content     interface{}
 	ContentType string
-	Cookies     []*http.Cookie
+
+	Cookies    []*http.Cookie
+	CookiesUrl *url.URL
 }
 
 func (r *Result) ToString() string {
