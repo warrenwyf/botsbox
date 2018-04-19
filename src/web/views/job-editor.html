@@ -230,7 +230,7 @@
 
 					if (oldRule != newRule) {
 						UIkit.modal.confirm("Are you sure to discard unsaved changes?", function() {
-							history.back();
+							location.href = '/';
 						}, {
 							labels: { 'Ok': 'Yes', 'Cancel': 'No' }
 						});
@@ -323,6 +323,8 @@
 						}
 
 						vm.updateJob(vm.jobId, title, rule);
+					}, {
+						labels: { 'Ok': 'Ok', 'Cancel': 'Cancel' }
 					});
 				} else {
 					UIkit.modal.prompt("Give a name:", "", function(title) {
@@ -332,6 +334,8 @@
 						}
 
 						vm.createJob(title, rule);
+					}, {
+						labels: { 'Ok': 'Ok', 'Cancel': 'Cancel' }
 					});
 				}
 			},
@@ -346,7 +350,9 @@
 				}, function(data) {
 					code = data['code'];
 					if (!code) {
+						vm.jobId = data['id'];
 						vm.job = {
+							id: data['id'],
 							title: title,
 							rule: rule,
 						};
