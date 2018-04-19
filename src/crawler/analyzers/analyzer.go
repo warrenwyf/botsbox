@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	regAction = regexp.MustCompile(`^\$\[*.+\]`)
+	regAction = regexp.MustCompile(`^\$\[[^\$]*\]`) // $[<0 or n chars except $>]
 )
 
 type Result struct {

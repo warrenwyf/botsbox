@@ -321,13 +321,16 @@ func (self *HtmlAnalyzer) extractHtmlValue(element *goquery.Selection, pipeline 
 		selectorStr := regAction.FindString(pipeline)
 		selector := strings.TrimSuffix(strings.TrimPrefix(selectorStr, "$["), "]")
 		action := strings.TrimPrefix(strings.TrimPrefix(pipeline, selectorStr), ".$")
-		if len(selector) == 0 || len(action) == 0 {
+		if len(action) == 0 {
 			return ""
 		}
 
-		s := element.Find(selector).First()
-		return actOnHtmlSelection(s, action)
-
+		if len(selector) == 0 {
+			return actOnHtmlSelection(element, action)
+		} else {
+			s := element.Find(selector).First()
+			return actOnHtmlSelection(s, action)
+		}
 	}
 
 	return ""

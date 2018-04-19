@@ -304,13 +304,16 @@ func (self *XmlAnalyzer) extractXmlValue(element *etree.Element, pipeline string
 		selectorStr := regAction.FindString(pipeline)
 		selector := strings.TrimSuffix(strings.TrimPrefix(selectorStr, "$["), "]")
 		action := strings.TrimPrefix(strings.TrimPrefix(pipeline, selectorStr), ".$")
-		if len(selector) == 0 || len(action) == 0 {
+		if len(action) == 0 {
 			return ""
 		}
 
-		s := element.FindElement(selector)
-		return actOnXmlSelection(s, action)
-
+		if len(selector) == 0 {
+			return actOnXmlSelection(element, action)
+		} else {
+			s := element.FindElement(selector)
+			return actOnXmlSelection(s, action)
+		}
 	}
 
 	return ""
