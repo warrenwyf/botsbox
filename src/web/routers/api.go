@@ -75,7 +75,7 @@ func UseApiRouter(e *echo.Echo) {
 		title := c.Request().PostFormValue("title")
 		rule := c.Request().PostFormValue("rule")
 
-		_, err := store.GetStore().InsertObject(store.JobDataset,
+		id, err := store.GetStore().InsertObject(store.JobDataset,
 			[]string{"title", "rule", "status"},
 			[]interface{}{title, rule, "deactive"})
 
@@ -88,6 +88,7 @@ func UseApiRouter(e *echo.Echo) {
 
 		result := map[string]interface{}{
 			"code": code,
+			"id":   id,
 		}
 
 		return writeJsonResponse(c.Response(), result)
