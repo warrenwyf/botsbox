@@ -3,6 +3,7 @@
 
 <head>
 	<meta charset="utf-8">
+	<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval';">
 	<meta http-equiv="x-ua-compatible" content="ie=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
 
@@ -26,8 +27,10 @@
 
 		<div id="jobs-container" class="uk-margin-large-top uk-container-center uk-width-1-1 uk-width-xlarge-3-5 uk-width-xxlarge-1-2">
 
-			<div class="uk-margin-left uk-margin-large-bottom uk-text-large">
-				<a href="/create-job" class="uk-icon-hover uk-icon-plus-square" title="Create A Job"></a>
+			<div class="uk-margin-left uk-margin-right uk-margin-large-bottom uk-text-large uk-clearfix">
+				<a href="/create-job" class="uk-icon-hover uk-icon-plus-square uk-float-left" title="Create A Job"></a>
+
+				<div v-if="startedAt>0" class="uk-text-small uk-text-success uk-float-right"><i class='uk-icon-power-off'></i> <span v-html="formatTimeInSecs(startedAt)"></span></div>
 			</div>
 
 			<ul id="ul-jobs" class="uk-list">
@@ -85,6 +88,8 @@
 		el: '#body-container',
 
 		data: {
+			startedAt: 0,
+
 			jobs: [],
 			jobsIndex: {},
 			activeJobs: {},
@@ -127,6 +132,7 @@
 				vm.fetchingJobs = true;
 				$.get("/api/jobs", function(data) {
 					vm.jobs = data['jobs'];
+					vm.startedAt = data['startedAt']
 
 					vm.ensureJobsIndex();
 				}, "json").always(function() {

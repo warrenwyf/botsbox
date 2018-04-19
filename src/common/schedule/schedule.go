@@ -157,6 +157,10 @@ func (self *Schedule) Stop() {
 	self.stopChan <- signal
 }
 
+func (self *Schedule) GetStartedAt() time.Time {
+	return self.startedAt
+}
+
 /**
  * goroutine loop
  */

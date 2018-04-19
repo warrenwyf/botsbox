@@ -38,8 +38,12 @@ func UseApiRouter(e *echo.Echo) {
 			}
 		}
 
+		hub := app.GetHub()
+		startedAt := hub.GetStartedAt()
+
 		result := map[string]interface{}{
-			"jobs": jobs,
+			"jobs":      jobs,
+			"startedAt": startedAt.UTC().Unix(),
 		}
 
 		return writeJsonResponse(c.Response(), result)

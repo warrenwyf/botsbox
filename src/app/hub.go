@@ -2,6 +2,7 @@ package app
 
 import (
 	"sync"
+	"time"
 
 	"../common/schedule"
 	"../crawler/job"
@@ -51,6 +52,10 @@ func (h *Hub) Init() error {
 	h.jobSchedule.Start()
 
 	return nil
+}
+
+func (h *Hub) GetStartedAt() time.Time {
+	return h.jobSchedule.GetStartedAt()
 }
 
 func (h *Hub) Destroy() {

@@ -3,6 +3,7 @@
 
 <head>
 	<meta charset="utf-8">
+	<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval';">
 	<meta http-equiv="x-ua-compatible" content="ie=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
 
@@ -28,7 +29,16 @@
 	}
 
 	#rule-testrun .result {
-		background: #fff
+		background: #fff;
+		color: #333;
+		width: 100%;
+	}
+
+	#rule-testrun .html-result {
+		background: #fff;
+		color: #333;
+		width: 100%;
+		height: 300px;
 	}
 	</style>
 </head>
@@ -104,14 +114,13 @@
 		console.error('Test Run channel error')
 	};
 	ws.onmessage = function(evt) {
-		var msg = evt.data;
+		var msg = evt.data || "";
 		try {
 			if (msg == "$finished") {
 				vm.testrunning = false;
 			} else {
 				$('#rule-testrun').append('<div class="time">[ ' + moment().format('YYYY-MM-DD HH:mm:ss') + ' ]</div>');
 				$('#rule-testrun').append('<div class="log">➜ ' + msg + '</div>');
-
 
 				$('body>:not(#body-container, script)').remove(); // Some pages append content at footer
 				$('#rule-testrun').scrollTop($('#rule-testrun').prop("scrollHeight"));

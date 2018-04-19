@@ -249,7 +249,13 @@ func (self *Job) fn() {
 									if fetchResult != nil {
 										resultStr = fetchResult.ToString()
 									}
-									self.testrunChan <- fmt.Sprintf("Target[%s] crawled, result: \n <div class='result'>%s</div>", t.Url, resultStr)
+
+									str := strings.Replace(resultStr, "\"", "'", -1)
+									if strings.HasPrefix(fetchResult.ContentType, "text/html") {
+										self.testrunChan <- fmt.Sprintf("Target[%s] crawled, result: \n <iframe class=\"html-result\" srcdoc=\"%s\"></iframe>", t.Url, str)
+									} else {
+										self.testrunChan <- fmt.Sprintf("Target[%s] crawled, result: \n <div class=\"result\">%s</div>", t.Url, str)
+									}
 								}
 							}
 

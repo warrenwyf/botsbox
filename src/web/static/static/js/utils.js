@@ -6,29 +6,11 @@ utils.formatTimeInSecs = function(secs) {
 
 	str = '';
 
-	if (today.year() != time.year()) {
-		str += time.format('YYYY-');
+	if (!(today.year() == time.year() && today.month() == time.month() && today.date() == time.date())) {
+		str = time.format('YYYY-MM-DD ');
 	}
 
-	if (today.month() != time.month()) {
-		str += time.format('MM-');
-	}
-
-	if (today.date() != time.date()) {
-		str += time.format('DD');
-	}
-
-	str = str || ' '
-
-	if (today.hour() != time.hour()) {
-		str += time.format('HH:');
-	}
-
-	if (today.minute() != time.minute()) {
-		str += time.format('mm:');
-	}
-
-	str += time.format('ss')
+	str += time.format('HH:mm:ss');
 
 	return str
 };
