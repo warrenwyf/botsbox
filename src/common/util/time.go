@@ -56,7 +56,7 @@ func ParseDuration(str string) (time.Duration, error) { // 5s | 30m | 1h | 2d
 			return maxDuration, errors.New("Duration must greater than zero")
 		}
 
-		return time.Duration(day) * time.Hour, nil
+		return time.Duration(day) * 24 * time.Hour, nil
 	}
 
 	return maxDuration, errors.New("Wrong format")
