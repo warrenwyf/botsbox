@@ -1,10 +1,17 @@
 package routers
 
 import (
+	"encoding/csv"
+	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/labstack/echo"
+	"github.com/tidwall/gjson"
 
 	"../../app"
 	"../../crawler/job"
+	"../../crawler/rule"
 	"../../runtime"
 	"../../store"
 	"../../xlog"
@@ -106,11 +113,26 @@ func UseApiRouter(e *echo.Echo) {
 			return err
 		}
 
+		// Parse outputs names
+		outputNames := []string{}
+		if r, err := rule.NewRuleWithContent(jobObj["rule"].(string)); err == nil {
+			for _, tt := range r.TargetTemplates {
+				for _, output := range tt.ObjectOutputs {
+					outputNames = append(outputNames, output.Name)
+				}
+
+				for _, output := range tt.ListOutputs {
+					outputNames = append(outputNames, output.Name)
+				}
+			}
+		}
+
 		result := map[string]interface{}{
-			"id":     jobObj["_id"],
-			"title":  jobObj["title"],
-			"rule":   jobObj["rule"],
-			"status": jobObj["status"],
+			"id":      jobObj["_id"],
+			"title":   jobObj["title"],
+			"rule":    jobObj["rule"],
+			"status":  jobObj["status"],
+			"outputs": outputNames,
 		}
 
 		return writeJsonResponse(c.Response(), result)
@@ -226,6 +248,100 @@ func UseApiRouter(e *echo.Echo) {
 
 		result := map[string]interface{}{
 			"code": 0,
+		}
+
+		return writeJsonResponse(c.Response(), result)
+	})
+
+	e.GET(joinPath(ApiPrefix, "/data/:dataset/export.:format"), func(c echo.Context) error {
+		dataset := c.Param("dataset")
+		format := strings.ToLower(c.Param("format"))
+
+		dataObjs, err := store.GetStore().QueryAllDataObjects(dataset)
+		if err != nil {
+			return err
+		}
+
+		fieldsMap := map[string]struct{}{}
+		for _, dataObj := range dataObjs {
+			obj, ok := gjson.Parse(dataObj["data"].(string)).Value().(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			id, ok := dataObj["id"]
+			if ok {
+				idStr := id.(string)
+				if len(idStr) > 0 {
+					obj["id"] = idStr
+				}
+			}
+
+			for k, _ := range obj {
+				_, ok := fieldsMap[k]
+				if !ok {
+					fieldsMap[k] = struct{}{}
+				}
+			}
+		}
+
+		fields := []string{}
+		for field, _ := range fieldsMap {
+			fields = append(fields, field)
+		}
+		sort.Strings(fields)
+
+		if format == "csv" {
+			w := csv.NewWriter(c.Response())
+			if err := w.Write(fields); err != nil {
+				return err
+			}
+
+			for _, dataObj := range dataObjs {
+				obj, ok := gjson.Parse(dataObj["data"].(string)).Value().(map[string]interface{})
+				if !ok {
+					continue
+				}
+
+				id, ok := dataObj["id"]
+				if ok {
+					obj["id"] = id
+				}
+
+				values := []string{}
+				for _, field := range fields {
+					value, ok := obj[field]
+					if ok {
+						values = append(values, fmt.Sprintf("%v", value))
+					} else {
+						values = append(values, "")
+					}
+				}
+
+				if err := w.Write(values); err != nil {
+					return err
+				}
+			}
+
+			w.Flush()
+		}
+
+		return nil
+	})
+
+	e.POST(joinPath(ApiPrefix, "/data/:dataset/empty"), func(c echo.Context) error {
+		dataset := c.Param("dataset")
+
+		code := 0
+
+		if err := store.GetStore().EmptyDataset(dataset); err != nil {
+			code = 5001
+
+			xlog.Errln("Empty dataset error:", err)
+		}
+
+		result := map[string]interface{}{
+			"code": code,
 		}
 
 		return writeJsonResponse(c.Response(), result)

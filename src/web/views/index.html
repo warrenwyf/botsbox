@@ -49,6 +49,8 @@
 					</div>
 					<div class="uk-width-4-10 uk-text-break" style="border-left: 1px solid #ddd">
 						<a class="uk-link" :href="'/job/'+job.id" v-html="job['title']"></a>
+
+						<a class="uk-icon-justify uk-icon-hover uk-icon-database uk-margin-left" :href="'/job/'+job.id+'/outputs'"></a>
 					</div>
 					<div class="uk-width-1-10">
 						<div v-if="activeJobs[job.id]" class="uk-text-muted" v-text="activeJobs[job.id].crawled" title="Crawled Targets"></div>

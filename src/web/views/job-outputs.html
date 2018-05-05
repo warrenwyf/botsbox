@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval';">
+	<meta http-equiv="x-ua-compatible" content="ie=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+
+	<title>botsbox</title>
+	<link rel="icon" href="/static/img/favicon.ico">
+
+	<link rel="stylesheet" href="/static/css/uikit.min.css">
+	<link rel="stylesheet" href="/static/css/uikit-components/notify.min.css">
+</head>
+
+<body>
+
+	<div id="body-container" class="uk-height-viewport uk-clearfix">
+
+		<div id="header">
+			<div class="uk-margin-top uk-clearfix">
+				<div class="uk-float-left uk-flex uk-flex-bottom">
+					<img class="uk-margin-small-left" src="/static/img/favicon.ico" style="width: 24px">
+					<span class="uk-margin-small-left">botsbox<small class="uk-text-muted uk-margin-small-left">{{ .version }}</small></span>
+				</div>
+
+				<div class="uk-float-right uk-margin-right">
+					<span v-if="job" v-html="job.title" class="uk-margin-right"></span>
+					<a href="javascript:;" class="uk-icon-button uk-icon-arrow-left" @click="back()" title="Back"></a>
+				</div>
+			</div>
+
+			<hr style="margin-bottom: 0">
+		</div>
+
+		<div id="outputs-container" class="uk-margin-large-top uk-container-center uk-width-1-1 uk-width-xlarge-3-5 uk-width-xxlarge-1-2">
+
+			<ul v-if="job" id="ul-outputs" class="uk-list">
+
+				<li v-for="output in job.outputs" class="uk-grid" data-uk-grid-match>
+					<div>
+						<a class="uk-link uk-margin-left" :href="'/api/data/'+output+'/export.csv'" v-html="output" target="_blank"></a>
+
+						<a class="uk-icon-hover uk-icon-recycle uk-margin-left uk-margin-right" href="javascript:;" target="_blank" title="Empty data" @click="emptyOutput(output)"></a>
+					</div>
+				</li>
+
+			</ul>
+
+		</div>
+
+	</div>
+
+	<script src="/static/js/jquery.min.js"></script>
+	<script src="/static/js/vue.min.js"></script>
+	<script src="/static/js/uikit.min.js"></script>
+	<script src="/static/js/uikit-components/notify.min.js"></script>
+	<script src="/static/js/moment-with-locales.min.js"></script>
+	<script src="/static/js/utils.js"></script>
+
+	<script type="text/javascript">
+	moment.locale(navigator.language);
+
+	var vm = new Vue({
+
+		el: '#body-container',
+
+		data: {
+			jobId: '{{ .jobId }}',
+
+			job: null,
+			fetchingJob: false,
+
+			doingEmptyOutputs: {},
+		},
+
+		computed: {
+
+			hasJobId: function() {
+				var vm = this;
+				return vm.jobId && vm.jobId.length > 0;
+			},
+
+		},
+
+		mounted: function() {
+			var vm = this;
+
+			if (vm.hasJobId) {
+				vm.fetchJob(vm.jobId);
+			}
+		},
+
+		methods: {
+
+			fetchJob: function(jobId) {
+				var vm = this;
+
+				vm.fetchingJob = true;
+				$.get("/api/job/" + jobId, function(data) {
+					vm.job = data;
+				}, "json").always(function() {
+					vm.fetchingJob = false;
+				});
+			},
+
+			back: function() {
+				history.back();
+			},
+
+			emptyOutput: function(output) {
+				var vm = this;
+
+				if (vm.doingEmptyOutputs[output]) {
+					return;
+				}
+
+				UIkit.modal.confirm("Are you sure empty the output?", function() {
+					vm.$set(vm.doingEmptyOutputs, output, true);
+					$.post("/api/data/" + output + "/empty", {}, function(data) {
+						code = data['code'];
+						if (!code) {
+							UIkit.notify('Empty "' + output + '" successful', { timeout: 2000, status: 'success' });
+						} else {
+							UIkit.notify('Empty failed, please try later', { timeout: 2000, status: 'warning' });
+						}
+					}, "json").always(function() {
+						vm.$delete(vm.doingEmptyOutputs, output);
+					});
+				});
+			},
+
+		},
+
+	});
+	</script>
+</body>
+
+</html>

@@ -46,6 +46,13 @@ func Test_InsertObject(t *testing.T) {
 	}
 }
 
+func Test_EmptyDataset(t *testing.T) {
+	err := sqliteStore.EmptyDataset("$unittest")
+	if err != nil {
+		t.Fatalf("SqliteStore.EmptyDataset() failed: %v", err.Error())
+	}
+}
+
 func Test_Destroy(t *testing.T) {
 	err := sqliteStore.Destroy()
 	if err != nil {

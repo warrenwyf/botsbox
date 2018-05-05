@@ -77,7 +77,17 @@ func (self *SqliteStore) CreateDataset(datasetName string, fieldNames []string, 
 	return nil
 }
 
-func (self *SqliteStore) InsertObject(dataset string, fields []string, values []interface{}) (oid string, err error) {
+func (self *SqliteStore) EmptyDataset(datasetName string) error {
+	sqlDelete := fmt.Sprintf(`DELETE FROM "%s"`, datasetName)
+	_, errDelete := self.db.Exec(sqlDelete)
+	if errDelete != nil {
+		return errDelete
+	}
+
+	return nil
+}
+
+func (self *SqliteStore) InsertObject(datasetName string, fields []string, values []interface{}) (oid string, err error) {
 	fieldCount := util.IntMin(len(fields), len(values))
 	if fieldCount <= 0 {
 		return "", errors.New("No object will be created")
@@ -93,7 +103,7 @@ func (self *SqliteStore) InsertObject(dataset string, fields []string, values []
 	}
 	vString := strings.Join(vs, ",")
 
-	sql := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, dataset, fString, vString)
+	sql := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`, datasetName, fString, vString)
 	result, errSql := self.db.Exec(sql, values...)
 	if errSql != nil {
 		return "", errSql
@@ -107,7 +117,7 @@ func (self *SqliteStore) InsertObject(dataset string, fields []string, values []
 	return strconv.FormatInt(insertId, 10), nil
 }
 
-func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int64, err error) {
+func (self *SqliteStore) DeleteObjects(datasetName string, oids []string) (count int64, err error) {
 	ids := []interface{}{}
 	for _, oid := range oids {
 		id, err := strconv.Atoi(oid)
@@ -127,7 +137,7 @@ func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int
 	)
 
 	if idCount == 1 {
-		sql = fmt.Sprintf(`DELETE FROM "%s" WHERE _id = ?`, dataset)
+		sql = fmt.Sprintf(`DELETE FROM "%s" WHERE _id = ?`, datasetName)
 	} else {
 		holders := make([]string, idCount)
 		for i := 0; i < idCount; i++ {
@@ -135,7 +145,7 @@ func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int
 		}
 		inClause := strings.Join(holders, ",")
 
-		sql = fmt.Sprintf("DELETE FROM %s WHERE _id IN (%s)", dataset, inClause)
+		sql = fmt.Sprintf("DELETE FROM %s WHERE _id IN (%s)", datasetName, inClause)
 	}
 
 	result, errSql := self.db.Exec(sql, ids...)
@@ -146,7 +156,7 @@ func (self *SqliteStore) DeleteObjects(dataset string, oids []string) (count int
 	return result.RowsAffected()
 }
 
-func (self *SqliteStore) UpdateObject(dataset string, oid string, fields []string, values []interface{}) (count int64, err error) {
+func (self *SqliteStore) UpdateObject(datasetName string, oid string, fields []string, values []interface{}) (count int64, err error) {
 	idInt, errId := strconv.Atoi(oid)
 	if errId != nil {
 		return 0, errId
@@ -166,7 +176,7 @@ func (self *SqliteStore) UpdateObject(dataset string, oid string, fields []strin
 	copy(params, values)
 	params[fieldCount] = idInt
 
-	sql := fmt.Sprintf(`UPDATE "%s" SET %s WHERE _id=?`, dataset, fvString)
+	sql := fmt.Sprintf(`UPDATE "%s" SET %s WHERE _id=?`, datasetName, fvString)
 	result, errSql := self.db.Exec(sql, params...)
 	if errSql != nil {
 		return -1, errSql
@@ -295,6 +305,41 @@ func (self *SqliteStore) GetLatestTarget(hash string) (target map[string]interfa
 	}
 
 	return object, nil
+}
+
+func (self *SqliteStore) QueryAllDataObjects(datasetName string) (objs []map[string]interface{}, err error) {
+	sql := fmt.Sprintf(`SELECT "id","data" FROM "%s"`, datasetName)
+
+	rows, errSql := self.db.Query(sql)
+	if errSql != nil {
+		return nil, errSql
+	}
+	defer rows.Close()
+
+	objects := []map[string]interface{}{}
+	for rows.Next() {
+		var (
+			id   string
+			data string
+		)
+
+		errSql = rows.Scan(&id, &data)
+		if errSql != nil {
+			return nil, errSql
+		}
+
+		objects = append(objects, map[string]interface{}{
+			"id":   id,
+			"data": data,
+		})
+	}
+
+	errSql = rows.Err()
+	if errSql != nil {
+		return nil, errSql
+	}
+
+	return objects, nil
 }
 
 func (self *SqliteStore) Destroy() error {
